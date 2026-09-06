@@ -23,12 +23,12 @@ const os=require('node:os');const assert=require('node:assert/strict');const pat
     const screen=r.project(target),size=64,scale=r.width/r.canvas.clientWidth;
     const x=Math.round(screen[0]*scale-size/2),y=Math.round(r.height-screen[1]*scale-size/2);
     const before=new Uint8Array(size*size*4),after=new Uint8Array(before.length),gl=r.gl;
+    r.render(e.root,r.camera,ferro.state.angle);
     gl.readPixels(x,y,size,size,gl.RGBA,gl.UNSIGNED_BYTE,before);
-    const affected=kind==='ignition'?[...e.sparks.map(s=>s.group),...e.flames]:e.injectors.flatMap(i=>[...i.jets.map(j=>j.mesh),...i.drops.map(d=>d.mesh)]);
+    const affected=kind==='ignition'?e.sparks.map(s=>s.group):e.injectors.flatMap(i=>[...i.jets.map(j=>j.mesh),...i.drops.map(d=>d.mesh)]);
     const visibility=affected.map(n=>n.visible);affected.forEach(n=>n.visible=false);
-    const light=e.ignitionLights.slice();if(kind==='ignition')e.ignitionLights.fill(0);
     r.render(e.root,r.camera,ferro.state.angle);gl.readPixels(x,y,size,size,gl.RGBA,gl.UNSIGNED_BYTE,after);
-    affected.forEach((n,i)=>n.visible=visibility[i]);e.ignitionLights.set(light);r.render(e.root,r.camera,ferro.state.angle);
+    affected.forEach((n,i)=>n.visible=visibility[i]);r.render(e.root,r.camera,ferro.state.angle);
     let changed=0,total=0;for(let i=0;i<before.length;i+=4){const d=Math.abs(before[i]-after[i])+Math.abs(before[i+1]-after[i+1])+Math.abs(before[i+2]-after[i+2]);if(d>6)changed++;total+=d;}
     return {kind,changed,total,paused:!ferro.state.running,glError:gl.getError(),inspection:ferro.camera.inspection,sparks:e.sparks.filter(s=>s.group.visible).length,sprays:e.injectors.map(i=>i.jets.filter(j=>j.mesh.visible).length)};
    },kind);

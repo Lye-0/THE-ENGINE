@@ -8,7 +8,7 @@
         { name: 'バルブ & スプリング', en: 'VALVETRAIN', kicker: 'THE BREATHING MECHANISM', body: '左右14°ずつ傾いた吸排気バルブ。カムに押されるバケット、ステム、スプリングが同じ軸で動き、バルブが燃焼室側へ開きます。', fact: '28° INCLUDED ANGLE / 16 VALVES<br>吸気と排気の切り替わりには、両方が開くオーバーラップがあります。' },
         { name: 'カムシャフト', en: 'DUAL OVERHEAD CAMSHAFT', kicker: 'THE MASTER OF TIMING', body: '2本のシャフトに並ぶ、卵形のカム。形状と位相の違いが16本のバルブを順番に動かし、エンジンが呼吸するタイミングを決めます。', fact: 'CRANK : CAM = 2 : 1<br>クランクが2回転する間に、カムが1回転します。' },
         { name: 'タイミングチェーン', en: 'TIMING DRIVE', kicker: 'EVERYTHING, IN SYNC', body: 'クランクと2本のカムをつなぐ、連続した金属のリンク。大小のスプロケットが回転比をつくり、ピストンとバルブの動きを同じ時間軸に保ちます。', fact: '20 / 40 TEETH · CHAIN DRIVE<br>分解表示では軸間が離れるため、チェーンを非表示にしています。' },
-        { name: 'スパークプラグ', en: 'SPARK IGNITION', kicker: 'THE MOMENT OF IGNITION', body: '中心電極と接地電極の間をつなぐ、青白い放電。圧縮上死点の手前で点火し、電極間に生まれた火炎核が燃焼室へ広がります。', fact: '0.9 mm GAP / 1.2 ms DISCHARGE<br>回転数に合わせて点火時期が進みます。再生で点火の瞬間を観察できます。', inspection: 'ignition' },
+        { name: 'スパークプラグ', en: 'SPARK IGNITION', kicker: 'THE MOMENT OF IGNITION', body: '中心電極から接地電極へ、赤い放電線が鋭く枝分かれします。圧縮上死点の手前で瞬間的に点火し、クランク角に同期して燃焼が進みます。', fact: '0.9 mm GAP / 1.2 ms DISCHARGE<br>回転数に合わせて点火時期が進みます。再生で点火の瞬間を観察できます。', inspection: 'ignition' },
         { name: 'インテーク & インジェクター', en: 'PORT FUEL INJECTION', kicker: 'AIR MEETS FUEL', body: 'スロットルからプレナム、4本のランナーへ。燃料レールにつながるインジェクターが2方向に霧化し、開いた吸気バルブへ混合気を送ります。', fact: 'SEQUENTIAL MULTIPOINT INJECTION<br>1気筒に1本。噴射パルスと噴霧の移動は回転数・クランク角に同期します。', inspection: 'injection' },
         { name: 'エキゾーストマニホールド', en: '4–2–1 EXHAUST HEADER', kicker: 'THE PATH OF EXHAUST', body: '排気バルブを出たガスが、4本の独立管から2本、そして1本の集合管へ。曲がりを持つ中空の管、接合部、出口フランジと酸素センサーを備えます。', fact: '1 + 4 / 2 + 3 CYLINDER PAIRING<br>各ペアの排気パルスは360°間隔で集合部へ向かいます。' }
     ];
@@ -23,9 +23,9 @@
         focus(kind) {
             this.inspection = kind; this.auto = false;
             const ignition = kind === 'ignition', aspect = this.canvas.clientWidth / Math.max(1, this.canvas.clientHeight);
-            this.targetGoal = ignition ? [-2.175, 3.012, 0] : [-.725, 3.24, -.85];
+            this.targetGoal = ignition ? [-2.175, K.HEAD.sparkY - K.HEAD.sparkGap / 2, 0] : [-.725, 3.24, -.85];
             this.yaw = ignition ? 0 : Math.PI + .72; this.pitch = ignition ? -.18 : .91;
-            this.radiusGoal = (ignition ? 1.55 : 2.7) * Math.max(1, .70 / aspect);
+            this.radiusGoal = (ignition ? .58 : 2.7) * Math.max(1, .70 / aspect);
         }
         bind() { const c = this.canvas; c.addEventListener('contextmenu', e => e.preventDefault()); c.addEventListener('pointerdown', e => { c.setPointerCapture(e.pointerId); this.pointers.set(e.pointerId, { x: e.clientX, y: e.clientY, button: e.button }); this.auto = false; document.dispatchEvent(new Event('ferro:orbit-stopped')); }); c.addEventListener('pointermove', e => { const old = this.pointers.get(e.pointerId); if (!old)
             return; const before = [...this.pointers.values()].map(p => ({ ...p })); this.pointers.set(e.pointerId, { ...old, x: e.clientX, y: e.clientY }); if (this.pointers.size === 1) {

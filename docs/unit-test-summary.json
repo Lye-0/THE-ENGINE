@@ -1,9 +1,9 @@
 {
-  "pass": 45,
+  "pass": 48,
   "cancelled": 0,
   "skipped": 0,
   "node": "v24.19.0",
-  "tests": 45,
+  "tests": 48,
   "command": "node --test tests/kinematics.test.cjs tests/geometry.test.cjs tests/server.test.cjs tests/site.test.cjs",
   "fail": 0,
   "todo": 0

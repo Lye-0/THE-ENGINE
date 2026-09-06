@@ -42,8 +42,7 @@ vec3 aces(vec3 x){return clamp((x*(2.51*x+.03))/(x*(2.43*x+.59)+.14),0.,1.);}
 void main(){vec3 n=normalize(vNormal);if(!gl_FrontFacing)n=-n;vec3 view=normalize(uCamera-vWorld);float rough=clamp(uRough,.08,.95),metal=uMetal;vec3 base=pow(uColor,vec3(2.2));float alpha=uAlpha;
 if(uChamber.z>0.0){vec2 radial=vec2(vWorld.x-uChamber.x,vWorld.z);if(length(radial)>uChamber.z||vWorld.y<uChamber.y||vWorld.y>uChamber.w-abs(vWorld.z)*uChamberSlope)discard;}
 if(uUseMap>.5){vec4 tex=texture(uMap,vUV);base*=pow(tex.rgb,vec3(2.2));alpha*=tex.a;if(alpha<.02)discard;}
-if(uKind>5.5&&uKind<6.5){alpha*=pow(abs(dot(n,view)),1.7);outColor=vec4(pow(aces(uColor*uEmission),vec3(1./2.2)),alpha);outNormal=vec4(normalize(mat3(uView)*n)*.5+.5,1);return;}
-if(uKind>7.5&&uKind<8.5){float turbulence=noise(vLocal*18.+vec3(uTime*4.,uTime*7.,0.));float rim=pow(1.-abs(dot(n,view)),.6);alpha*=.20+.7*rim;alpha*=smoothstep(.18,.78,turbulence);outColor=vec4(pow(aces(uColor*(uEmission+turbulence)),vec3(1./2.2)),alpha);outNormal=vec4(normalize(mat3(uView)*n)*.5+.5,1);return;}
+if(uKind>5.5&&uKind<6.5){alpha*=pow(abs(dot(n,view)),.9);vec3 radiance=uColor*(.55+.45*clamp(uEmission/8.,0.,1.));outColor=vec4(radiance,alpha);outNormal=vec4(normalize(mat3(uView)*n)*.5+.5,1);return;}
 if(uKind>8.5&&uKind<9.5){if(dot(normalize(vNormal),view)<0.)discard;float optical=0.;float stepSize=uSprayOrigin.w/32.;float jitter=hash(vWorld*230.);for(int i=0;i<32;i++){vec3 q=vWorld-view*(float(i)+jitter)*stepSize-uSprayOrigin.xyz;float axial=dot(q,uSprayAxis),t=axial/uSprayOrigin.w;float radius=max(.001,.105*axial);float radial=length(q-uSprayAxis*axial)/radius;if(t>uFlow.y&&t<uFlow.x&&radial<1.){float density=exp(-3.*radial*radial)*(.55+.45*noise(q*180.+vec3(0,0,-uFlow.z)));optical+=density*stepSize;}}alpha*=1.-exp(-optical*60.);if(alpha<.001)discard;outColor=vec4(pow(aces(uColor*.85),vec3(1./2.2)),alpha);outNormal=vec4(normalize(mat3(uView)*n)*.5+.5,1);return;}
 if(uKind>3.5&&uKind<4.5){float ripple=noise(vec3(vLocal.x*9.,vLocal.y*6.-uTime*2.,vLocal.z*9.));float edge=pow(1.-abs(dot(n,view)),1.4);alpha*=.45+.5*edge;vec3 c=uColor*(.75+ripple*.4+uEmission);outColor=vec4(pow(aces(c),vec3(1./2.2)),alpha);outNormal=vec4(normalize(mat3(uView)*n)*.5+.5,1);return;}
 if(uKind>.5&&uKind<1.5){float coord=vLocal.y*410.;float footprint=fwidth(coord);float lines=sin(coord)*exp(-footprint*.6);float crown=sin(length(vLocal.xz)*850.)*exp(-fwidth(length(vLocal.xz)*850.)*.45);rough=clamp(rough+lines*.023+crown*.011,.09,.85);base*=.96+.025*lines;}
@@ -52,7 +51,7 @@ if(uKind>2.5&&uKind<3.5){float lines=sin(vLocal.x*370.)*exp(-fwidth(vLocal.x*370
 float sh=shadow(n);vec3 color=lightBRDF(n,view,normalize(vec3(-3.,6.,5.)),vec3(2.8,2.8,2.65)*sh,base,rough,metal);
 color+=lightBRDF(n,view,normalize(vec3(4.,3.,-4.)),vec3(1.55,1.9,2.3),base,rough,metal);
 color+=lightBRDF(n,view,normalize(vec3(-3.,1.,-2.)),vec3(.55,.66,.75),base,rough,metal);
-for(int i=0;i<4;i++){vec3 delta=uIgnitionLights[i].xyz-vWorld;float d=length(delta);float irradiance=uIgnitionLights[i].w*.012*(1.-smoothstep(.07,.48,d))/max(d*d,.0003);color+=lightBRDF(n,view,delta/max(d,.0001),vec3(.50,.70,1.)*irradiance,base,rough,metal);}
+for(int i=0;i<4;i++){vec3 delta=uIgnitionLights[i].xyz-vWorld;float d=length(delta);float irradiance=uIgnitionLights[i].w*.003*(1.-smoothstep(.02,.16,d))/max(d*d,.0003);color+=lightBRDF(n,view,delta/max(d,.0001),vec3(1.,.065,.008)*irradiance,base,rough,metal);}
 vec3 r=reflect(-view,n);vec3 f0=mix(vec3(.04),base,metal);vec3 fr=fresnel(max(dot(n,view),0.),f0);
 color+=environment(r,rough)*fr*(.80-.2*rough)*uAO;
 color+=environment(n,.93)*base*(1.-metal)*.36*uAO;
@@ -220,7 +219,7 @@ float grain=fract(sin(dot(gl_FragCoord.xy,vec2(12.9,78.2)))*43758.54)-.5;c.rgb+=
             gl.depthMask(false);
             const transparent = this.active.filter(b => b.m.alpha < .995).sort((a, b) => { const p = n => n.nodes[0].world; return V.len(V.sub([p(b)[12], p(b)[13], p(b)[14]], camera.eye)) - V.len(V.sub([p(a)[12], p(a)[13], p(a)[14]], camera.eye)); });
             for (const b of transparent) {
-                gl.blendFuncSeparate(gl.SRC_ALPHA, b.m.kind === 6 ? gl.ONE : gl.ONE_MINUS_SRC_ALPHA, gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
+                gl.blendFuncSeparate(gl.SRC_ALPHA, b.m.additive ? gl.ONE : gl.ONE_MINUS_SRC_ALPHA, gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
                 draw(b);
             }
             gl.depthMask(true);

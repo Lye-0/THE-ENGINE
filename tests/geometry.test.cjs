@@ -124,9 +124,84 @@ test('manifolds, injectors and ignition keep their physical attachments and visi
   engine.setMode(mode);engine.update(710*K.DEG,.016,true);
   assert.ok(engine.headers.visible&&engine.intake.visible);
   for(const section of engine.manifoldSections)assert.equal(section.mesh.geometry,mode==='cutaway'?section.cut:section.full);
-  if(mode!=='cutaway')assert.ok(engine.sparks.every(s=>!s.group.visible)&&engine.flames.every(f=>!f.visible));
+  if(mode!=='cutaway')assert.ok(engine.sparks.every(s=>!s.group.visible)&&engine.gases.every(g=>!g.visible));
  }
  engine.update(710*K.DEG,.016,false);
  assert.ok(engine.sparks.every(s=>!s.group.visible));assert.ok(engine.gases.every(g=>!g.visible));
  assert.ok(engine.injectors.every(i=>i.jets.every(j=>!j.mesh.visible)));
+});
+
+// Intersect the actual triangles, so a visually hidden wall cannot pass these
+// checks merely because the emitter and destination coordinates line up.
+const geometryBounds=new Map();
+function segmentHitsGeometry(g,start,end){
+ const d=V.sub(end,start),p=g.positions;
+ if(!geometryBounds.has(g.id)){
+  const min=[Infinity,Infinity,Infinity],max=[-Infinity,-Infinity,-Infinity];
+  p.forEach((v,i)=>{min[i%3]=Math.min(min[i%3],v);max[i%3]=Math.max(max[i%3],v);});
+  geometryBounds.set(g.id,{min,max});
+ }
+ const {min,max}=geometryBounds.get(g.id);let low=0,high=1;
+ for(let a=0;a<3;a++){
+  if(Math.abs(d[a])<1e-12){if(start[a]<min[a]||start[a]>max[a])return false;}
+  else{const t0=(min[a]-start[a])/d[a],t1=(max[a]-start[a])/d[a];low=Math.max(low,Math.min(t0,t1));high=Math.min(high,Math.max(t0,t1));}
+ }
+ if(low>high)return false;
+ for(let k=0;k<g.indices.length;k+=3){
+  const q=[0,1,2].map(i=>p.subarray(g.indices[k+i]*3,g.indices[k+i]*3+3));
+  const e1=V.sub(q[1],q[0]),e2=V.sub(q[2],q[0]),h=V.cross(d,e2),det=V.dot(e1,h);
+  if(Math.abs(det)<1e-12)continue;
+  const s=V.sub(start,q[0]),u=V.dot(s,h)/det;if(u<0||u>1)continue;
+  const cross=V.cross(s,e1),v=V.dot(d,cross)/det;if(v<0||u+v>1)continue;
+  const t=V.dot(e2,cross)/det;if(t>1e-5&&t<1-1e-5)return true;
+ }
+ return false;
+}
+test('shared port inlets keep a clear bore in full and sectioned geometry',()=>{
+ assert.equal(engine.portPassages.length,8);
+ for(const port of engine.portPassages){
+  const radius=(port.side<0?.205:.177)-.022;
+  const start=V.add(port.trunk[0],[0,0,port.side*.045]);
+  const end=V.add(port.trunk.at(-1),[0,0,port.side*.03]);
+  for(const geometry of [port.full,port.cut]){
+   assert.ok(geometry.positions.every(Number.isFinite)&&geometry.normals.every(Number.isFinite));
+   assert.ok(geometry.indices.every(i=>i<geometry.positions.length/3));
+   for(const u of [-.5,-.25,0,.25,.5])for(const v of [-.5,-.25,0,.25,.5]){
+    const offset=[u*radius,v*radius,0];
+    assert.equal(segmentHitsGeometry(geometry,V.add(start,offset),V.add(end,offset)),false,`inlet blocked: cylinder ${port.i+1}, bank ${port.side}`);
+   }
+  }
+ }
+});
+test('both injector spray cones have clear passages through each intake fork',()=>{
+ for(const injector of engine.injectors){
+  const port=engine.portPassages.find(p=>p.i===injector.i&&p.side===-1);
+  const centre=[engine.xs[injector.i],0,0],start=V.sub(injector.nozzle,centre);
+  for(const jet of injector.jets){
+   const target=V.sub(jet.target,centre),axis=V.norm(V.sub(target,start));
+   const u=V.norm(V.cross(axis,[0,1,0])),v=V.cross(axis,u);
+   for(const geometry of [port.full,port.cut])for(let sample=0;sample<9;sample++){
+    const angle=sample/8*Math.PI*2,r=sample===8?0:jet.length*.105*.6;
+    const end=V.add(target,V.add(V.mul(u,Math.cos(angle)*r),V.mul(v,Math.sin(angle)*r)));
+    assert.equal(segmentHitsGeometry(geometry,start,end),false,`spray hits pipe wall: cylinder ${injector.i+1}, sample ${sample}`);
+   }
+  }
+ }
+});
+test('visible head supports and hardware do not cross the common intake passages',()=>{
+ engine.setMode('cutaway');engine.reducedMotion=true;engine.update(398*K.DEG,.016,false);engine.root.update();
+ const meshes=[];
+ const collect=n=>{if(!n.visible)return;if(n.geometry&&n.material.alpha>=.995)meshes.push({n,inverse:M.invert(n.world)});n.children.forEach(collect);};
+ collect(engine.root);
+ for(const port of engine.portPassages.filter(p=>p.side===-1)){
+  const origin=[engine.xs[port.i],0,0];
+  const start=V.add(origin,V.add(port.trunk[0],[0,0,-.045]));
+  const end=V.add(origin,V.add(port.trunk.at(-1),[0,0,-.03]));
+  for(const x of [-.09,0,.09])for(const y of [-.09,0,.09]){
+   const a=V.add(start,[x,y,0]),b=V.add(end,[x,y,0]);
+   for(const {n,inverse} of meshes){
+    assert.equal(segmentHitsGeometry(n.geometry,M.transform(inverse,a).slice(0,3),M.transform(inverse,b).slice(0,3)),false,`head mesh ${n.id} crosses cylinder ${port.i+1} inlet`);
+   }
+  }
+ }
 });

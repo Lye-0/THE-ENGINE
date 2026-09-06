@@ -199,5 +199,112 @@
         }
         return b.done();
     }
-    F.G = { geo, lathe, cylinder, ring, box, sphere, torus, tube, curve, helix, extrude, gear, cam, sweptPipe };
+    // One inlet and two outlets. Each branch starts as one half of the common
+    // bore and smoothly becomes round. No independent pipe walls overlap in
+    // the inlet. The small central web begins only at the downstream split.
+    function branchedPipe({ trunk, branches, inletRadius, outletRadius, wall = .022, cutPlane = null }) {
+        const b = meshBuilder(), sides = 48, half = sides / 2;
+        const planeN = cutPlane ? V.norm(cutPlane.normal) : null;
+        const distance = p => V.dot(planeN, p) - cutPlane.offset / V.len(cutPlane.normal);
+        const vertex = (p, n) => ({ p, n });
+        function triangle(a, c, d) {
+            const area = V.cross(V.sub(c.p, a.p), V.sub(d.p, a.p));
+            if (V.len(area) < 1e-12) return;
+            if (V.dot(area, V.add(a.n, V.add(c.n, d.n))) < 0) [c, d] = [d, c];
+            b.tri(...[a, c, d].map(v => b.vertex(v.p, v.n)));
+        }
+        function face(vertices) {
+            for (let k = 1; k < vertices.length - 1; k++) {
+                let poly = [vertices[0], vertices[k], vertices[k + 1]];
+                if (cutPlane) {
+                    const clipped = [];
+                    for (let j = 0; j < poly.length; j++) {
+                        const a = poly[j], c = poly[(j + 1) % poly.length], da = distance(a.p), dc = distance(c.p);
+                        if (da <= 0) clipped.push(a);
+                        if ((da < 0 && dc > 0) || (da > 0 && dc < 0)) {
+                            const t = da / (da - dc);
+                            clipped.push(vertex(V.lerp(a.p, c.p, t), V.norm(V.lerp(a.n, c.n, t))));
+                        }
+                    }
+                    poly = clipped;
+                }
+                for (let j = 1; j < poly.length - 1; j++) triangle(poly[0], poly[j], poly[j + 1]);
+            }
+        }
+        // Cap only the thickness of each wall cell, never the open lumen.
+        function sectionCell(points) {
+            if (!cutPlane) return;
+            const ds = points.map(distance);
+            if (Math.min(...ds) >= 0 || Math.max(...ds) <= 0) return;
+            const edges = [[0,1],[1,2],[2,3],[3,0],[4,5],[5,6],[6,7],[7,4],[0,4],[1,5],[2,6],[3,7]], cut = [];
+            for (const [a, c] of edges) {
+                if (ds[a] * ds[c] > 0 || Math.abs(ds[a] - ds[c]) < 1e-12) continue;
+                const p = V.lerp(points[a], points[c], ds[a] / (ds[a] - ds[c]));
+                if (!cut.some(q => V.len(V.sub(p, q)) < 1e-8)) cut.push(p);
+            }
+            if (cut.length < 3) return;
+            const centre = cut.reduce((sum, p) => V.add(sum, V.mul(p, 1 / cut.length)), [0,0,0]);
+            const ref = Math.abs(planeN[0]) < .9 ? [1,0,0] : [0,1,0];
+            const u = V.norm(V.sub(ref, V.mul(planeN, V.dot(ref, planeN)))), v = V.cross(planeN, u);
+            const angle = p => Math.atan2(V.dot(V.sub(p, centre), v), V.dot(V.sub(p, centre), u));
+            cut.sort((a, c) => angle(a) - angle(c));
+            for (let j = 1; j < cut.length - 1; j++) triangle(vertex(cut[0], planeN), vertex(cut[j], planeN), vertex(cut[j + 1], planeN));
+        }
+        const trunkPath = curve(trunk, 12), junction = trunkPath.at(-1);
+        const junctionTangent = V.norm(V.sub(trunkPath.at(-1), trunkPath.at(-2)));
+        function rings(points, branchSign = 0) {
+            const extent = Math.abs(points.at(-1)[0] - junction[0]);
+            return points.map((centre, i) => {
+                const tangent = branchSign && i === 0 ? junctionTangent : V.norm(V.sub(points[Math.min(i + 1, points.length - 1)], points[Math.max(i - 1, 0)]));
+                const u = V.norm(V.sub([1,0,0], V.mul(tangent, tangent[0]))), v = V.norm(V.cross(u, tangent));
+                const progress = branchSign ? F.clamp(Math.abs(centre[0] - junction[0]) / extent, 0, 1) : 0;
+                const blend = progress * progress * (3 - 2 * progress), ro = F.mix(inletRadius, outletRadius, blend);
+                const row = { centre, tangent, u, v, outer: [], inner: [], outer2: [], inner2: [], sign: branchSign || 1 };
+                for (const inside of [false, true]) for (let j = 0; j < sides; j++) {
+                    const r = ro - (inside ? wall : 0), angle = -Math.PI / 2 + j / sides * Math.PI * 2;
+                    let xy = [r * Math.cos(angle), r * Math.sin(angle)];
+                    if (branchSign) {
+                        const divider = inside ? wall / 2 : 0, limit = Math.acos(divider / r), height = Math.sqrt(r * r - divider * divider);
+                        const mouth = j <= half ? [r * Math.cos(-limit + j / half * limit * 2), r * Math.sin(-limit + j / half * limit * 2)] : [divider, height * (3 - 4 * j / sides)];
+                        xy = V.lerp([...mouth, 0], [...xy, 0], blend).slice(0,2);
+                        xy[0] *= branchSign;
+                    }
+                    const name = inside ? 'inner' : 'outer';
+                    row[name].push(V.add(centre, V.add(V.mul(u, xy[0]), V.mul(v, xy[1]))));
+                    row[name + '2'].push(xy);
+                }
+                return row;
+            });
+        }
+        function shell(rows, capStart, capEnd) {
+            const normals = {};
+            for (const name of ['outer','inner']) normals[name] = rows.map((row, i) => row[name].map((p, j) => {
+                const previous = (j + sides - 1) % sides, next = (j + 1) % sides;
+                const along = V.sub(rows[Math.min(i + 1, rows.length - 1)][name][j], rows[Math.max(i - 1, 0)][name][j]);
+                const across = V.sub(row[name][next], row[name][previous]), q = row[name + '2'];
+                const dx = q[next][0] - q[previous][0], dy = q[next][1] - q[previous][1];
+                const outward = V.add(V.mul(row.u, dy * row.sign), V.mul(row.v, -dx * row.sign));
+                let n = V.norm(V.cross(along, across));
+                if (V.dot(n, outward) < 0) n = V.mul(n, -1);
+                return name === 'inner' ? V.mul(n, -1) : n;
+            }));
+            for (let i = 0; i < rows.length - 1; i++) for (let j = 0; j < sides; j++) {
+                const next = (j + 1) % sides, indices = [[i,j],[i,next],[i+1,next],[i+1,j]];
+                for (const name of ['outer','inner']) face(indices.map(([a,c]) => vertex(rows[a][name][c], normals[name][a][c])));
+                sectionCell(['outer','inner'].flatMap(name => indices.map(([a,c]) => rows[a][name][c])));
+            }
+            for (const end of [0, rows.length - 1]) {
+                if (!(end === 0 ? capStart : capEnd)) continue;
+                const row = rows[end], n = V.mul(row.tangent, end === 0 ? -1 : 1);
+                for (let j = 0; j < sides; j++) {
+                    const next = (j + 1) % sides;
+                    face([row.outer[j], row.outer[next], row.inner[next], row.inner[j]].map(p => vertex(p, n)));
+                }
+            }
+        }
+        shell(rings(trunkPath), true, false);
+        for (const branch of branches) shell(rings(curve(branch, 28), Math.sign(branch.at(-1)[0] - junction[0])), true, true);
+        return b.done();
+    }
+    F.G = { geo, lathe, cylinder, ring, box, sphere, torus, tube, curve, helix, extrude, gear, cam, sweptPipe, branchedPipe };
 })(globalThis.FERRO);

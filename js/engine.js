@@ -20,7 +20,6 @@
             this.gases = [];
             this.sparks = [];
             this.plugs = [];
-            this.flames = [];
             this.injectors = [];
             this.manifoldSections = [];
             this.ignitionLights = new Float32Array(16);
@@ -232,26 +231,44 @@
                 const ground = plug.group([0, 0, 0], [0, PI / 2, 0]);
                 this.mesh(ground, this.box(.032, .095, .017, .004), m.steel, [0, .028, .065]);
                 this.mesh(ground, this.box(.032, .012, .082, .004), m.polish, [0, -h.sparkGap - .006, .031]);
-                const spark = plug.group(), arcMat = F.material('#cde4ff', 0, .2, 6, { alpha: .98, emission: 10 });
+                const spark = plug.group();
+                const arcMat = F.material('#ff1805', 0, .2, 6, { alpha: .98, emission: 8 });
+                const coronaMat = F.material('#ff0800', 0, .2, 6, { alpha: .40, emission: 4, additive: true });
                 const filaments = [];
-                for (let variant = 0; variant < 3; variant++) {
-                    const points = Array.from({ length: 10 }, (_, j) => {
-                        const t = j / 9, envelope = Math.sin(PI * t);
-                        return [.0016 * Math.sin(j * 2.7 + variant) * envelope, -h.sparkGap * t, .0012 * Math.cos(j * 3.1 + variant) * envelope];
+                const channel = (parent, points, radius, key) => {
+                    const core = this.mesh(parent, this.cached('arc-core-' + key, () => G.tube(points, radius, 8)), arcMat);
+                    const corona = this.mesh(parent, this.cached('arc-corona-' + key, () => G.tube(points, radius * 2.5, 8)), coronaMat);
+                    core.castShadow = false; corona.castShadow = false;
+                };
+                for (let variant = 0; variant < 5; variant++) {
+                    const filament = spark.group(), points = Array.from({ length: 6 }, (_, j) => {
+                        const t = j / 5, envelope = Math.sin(PI * t);
+                        return [.0032 * Math.sin(j * 2.37 + variant * .91) * envelope, -h.sparkGap * t, .0012 * Math.sin(j * 3.1 + variant) * envelope];
                     });
-                    const arc = this.mesh(spark, G.tube(points, .0011, 8), arcMat);
-                    arc.castShadow = false; filaments.push(arc);
+                    channel(filament, points, .00085, variant + '-main');
+                    filament.branches = [];
+                    // Every branch starts on the live channel and terminates
+                    // on the ground electrode. All positions are plug-local.
+                    for (let branch = 0; branch < 3; branch++) {
+                        const leader = filament.group(), start = points[1 + branch];
+                        const end = [[-.006, -h.sparkGap, -.005], [.009, -h.sparkGap, .004], [.018, -h.sparkGap, .001]][branch];
+                        const path = Array.from({ length: 4 }, (_, j) => {
+                            const t = j / 3, p = V.lerp(start, end, t), jitter = Math.sin(PI * t) * .0013;
+                            p[0] += Math.sin(j * 2.7 + variant + branch) * jitter;
+                            p[2] += Math.cos(j * 1.9 + variant) * jitter;
+                            return p;
+                        });
+                        channel(leader, path, .00055, variant + '-branch-' + branch);
+                        filament.branches.push(leader);
+                    }
+                    filaments.push(filament);
                 }
-                const halo = this.mesh(spark, G.sphere(.055, 24, 16), F.material('#367bff', 0, .3, 6, { alpha: .4, emission: .9 }), [0, -h.sparkGap / 2, 0]);
-                halo.castShadow = false;
-                this.sparks.push({ group: spark, filaments, halo, material: arcMat });
-                const flame = this.mesh(this.root, this.cached('flame-sphere', () => G.sphere(1, 40, 24)), F.material('#ffd18a', 0, .4, 8, { alpha: .35, emission: 2.4 }), [x, h.sparkY - h.sparkGap / 2, 0]);
-                flame.castShadow = false; this.flames.push(flame);
+                this.sparks.push({ group: spark, filaments, material: arcMat, coronaMaterial: coronaMat });
             });
-            // A rear section of the machined head remains to locate the visible valve seats.
-            this.mesh(this.valveFrame, this.box(5.78, .14, .17, .015), m.alloy, [0, 3.02, -.76]);
-            this.mesh(this.valveFrame, this.box(5.78, .08, .12, .01), m.steel, [0, 3.10, -.73]);
+            // Head piers sit between cylinders; the intake mouths remain open.
             for (const x of [-2.83, -1.45, 0, 1.45, 2.83]) {
+                this.mesh(this.valveFrame, this.box(.30, .14, .17, .015), m.alloy, [x, 3.02, -.76]);
+                this.mesh(this.valveFrame, this.box(.30, .08, .12, .01), m.steel, [x, 3.10, -.73]);
                 this.mesh(this.camFrame, this.box(.17, .89, .13, .014), m.alloy, [x, 3.53, -.74]);
                 this.bolt(this.valveFrame, [x, 3.101, -.77], [0, 0, 0], .7);
             }
@@ -408,6 +425,7 @@
             this.headers = this.root.group();
             this.intake = this.root.group();
             this.ports = this.valveFrame.group();
+            this.portPassages = [];
             this.primaryPaths = [];
             // Individual runners enter the head above the deck and divide to
             // the two valve bowls. Both banks stay attached in section view.
@@ -420,12 +438,16 @@
                         this.mesh(flange, this.box(.13, .054, .22, .045), m.alloy, [dx, 0, 0]);
                         this.bolt(flange, [dx, .029, 0], [], .68);
                     }
-                    for (const dx of [-h.valveX, h.valveX]) {
-                        const points = [[x + dx, h.seatY + .019, side * (h.seatZ + .005)],
-                            [x + dx, h.seatY + .09, side * (h.seatZ + .025)],
-                            [x + dx * .8, 3.145, side * .57], [x + dx * .38, 3.19, side * .80], [x, 3.20, side * .98]];
-                        this.manifoldPipe(this.ports, points, side > 0 ? .147 : .165, m.alloy);
-                    }
+                    const trunk = [[0,3.20,side*.98],[0,3.183,side*.88],[0,3.173,side*.79],[0,3.16,side*.70]];
+                    const branches = [-1,1].map(bank => [[0,3.16,side*.70], [bank*.075,3.14,side*.61], [bank*.15,3.11,side*.49],
+                        [bank*h.valveX,h.seatY+.09*Math.cos(h.tilt),side*(h.seatZ+.09*Math.sin(h.tilt))],
+                        [bank*h.valveX,h.seatY+.019*Math.cos(h.tilt),side*(h.seatZ+.019*Math.sin(h.tilt))]]);
+                    const spec = {trunk, branches, inletRadius: side > 0 ? .177 : .205, outletRadius: side > 0 ? .147 : .165};
+                    const full = this.cached('head-port-full-' + side, () => G.branchedPipe(spec));
+                    const cut = this.cached('head-port-cut-' + side, () => G.branchedPipe({...spec,cutPlane:{normal:[0,1,-side*.28],offset:2.9456}}));
+                    const mesh = this.mesh(this.ports, full, m.alloy, [x,0,0]);
+                    this.manifoldSections.push({mesh,full,cut});
+                    this.portPassages.push({mesh,full,cut,i,side,trunk,branches});
                 }
                 const inlet = [[x, 2.78, -1.88], [x, 3.04, -1.85], [x, 3.24, -1.60], [x, 3.25, -1.27], [x, 3.20, -.98]];
                 this.manifoldPipe(this.intake, inlet, .205, m.alloy);
@@ -530,21 +552,24 @@
                 gas.material.color = s.stage.rgb;
                 gas.material.alpha = s.stageIndex === 0 ? .08 + .10 * Math.exp(-s.progress * 4) : s.stageIndex === 2 ? .035 : .022;
                 gas.material.emission = s.stageIndex === 0 ? .55 * Math.exp(-s.progress * 4) : .02;
+                if (ignition.burning && s.stageIndex === 3) {
+                    gas.material.color = K.STAGES[0].rgb;
+                    gas.material.alpha = .025 * ignition.burn;
+                    gas.material.emission = .15 * ignition.burn;
+                }
                 gas.material.chamber = [this.xs[i], top, K.HEAD.bore - .001, K.ROOF_Y];
                 gas.visible = effects;
                 const spark = this.sparks[i];
                 spark.group.visible = effects && ignition.active;
-                spark.material.emission = 6 + ignition.intensity * 10;
-                spark.halo.material.alpha = .68 * ignition.intensity;
-                spark.filaments.forEach((filament, j) => { filament.visible = j === Math.floor(ignition.seconds / .00008) % 3; });
+                const strike = Math.floor(ignition.seconds / .00007), flicker = .82 + .18 * Math.sin(strike * 2.39 + i);
+                spark.material.emission = 4 + ignition.intensity * 6;
+                spark.material.alpha = .96 * ignition.intensity ** .22 * flicker;
+                spark.coronaMaterial.alpha = .40 * ignition.intensity * flicker;
+                spark.filaments.forEach((filament, j) => {
+                    filament.visible = j === (strike + i * 2) % spark.filaments.length;
+                    filament.branches.forEach((branch, k) => { branch.visible = (strike + k * 2) % 5 !== 0; });
+                });
                 this.ignitionLights.set([this.xs[i], K.HEAD.sparkY - K.HEAD.sparkGap / 2, 0, effects ? ignition.intensity : 0], i * 4);
-                const flame = this.flames[i], radius = .008 + .72 * ignition.burn ** .72;
-                flame.s = [radius, radius, radius];
-                flame.visible = effects && ignition.burning;
-                flame.material.chamber = gas.material.chamber;
-                flame.material.alpha = .43 * (1 - ignition.burn * .8);
-                flame.material.emission = 2.0 + (1 - ignition.burn) * 2;
-                flame.material.color = ignition.burn < .12 ? [.60, .78, 1] : [1, .68, .31];
             }
             for (const v of this.valves) {
                 const s = K.cylinderAt(this.angle, v.i), lift = s[v.kind];
