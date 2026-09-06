@@ -1,4 +1,4 @@
-/* FERRO I/4 — original procedural exhibit, modelled in approximate display units.
+/* THE ENGINE I/4 — original procedural exhibit, modelled in approximate display units.
  * The independent parts share geometry buffers. The animation is derived only
  * from K.cylinderAt(), never from unrelated sine-wave animation clocks.
  */

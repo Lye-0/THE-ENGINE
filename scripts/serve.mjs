@@ -22,5 +22,5 @@ const server = http.createServer(async (req,res) => {
   } catch (error) { const code = error instanceof URIError ? 400 : error.code === 'ENOENT' || error.code === 'ENOTDIR' ? 404 : 500; res.writeHead(code);res.end(code === 404 ? 'Not found' : 'Request failed'); }
 });
 server.on('error', error => {console.error(error.message);process.exitCode=1;});
-server.listen(port, host, () => console.log(`FERRO — http://${host}:${port}`));
+server.listen(port, host, () => console.log(`THE ENGINE — http://${host}:${port}`));
 for (const signal of ['SIGINT','SIGTERM']) process.on(signal,()=>server.close(()=>process.exit()));

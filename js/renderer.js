@@ -1,4 +1,4 @@
-/* FERRO WebGL2 renderer — instanced geometry, GGX metals, procedural studio
+/* THE ENGINE WebGL2 renderer — instanced geometry, GGX metals, procedural studio
  * reflections, soft shadow mapping and depth/normal ambient occlusion.
  * All shaders, textures and meshes are generated locally; no network requests.
  */

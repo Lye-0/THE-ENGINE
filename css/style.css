@@ -92,6 +92,7 @@ button svg {
 .brand {
   display:flex;
   align-items:center;
+  white-space:nowrap;
   font-size:26px;
   letter-spacing:.21em;
   font-weight:600;
@@ -1187,6 +1188,7 @@ dialog dd {
   }
   .brand {
     font-size:22px;
+    letter-spacing:.1em;
     gap:9px
   }
   .brand-mark {

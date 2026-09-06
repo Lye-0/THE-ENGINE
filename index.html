@@ -4,8 +4,8 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="theme-color" content="#111617">
-  <meta name="description" content="FERRO — 精密な直列4気筒エンジンを、回し、開き、観察する。インタラクティブな3Dエンジン・オブザーバトリー。">
-  <title>FERRO — Engine Observatory</title>
+  <meta name="description" content="THE ENGINE — 精密な直列4気筒エンジンを、回し、開き、観察する。インタラクティブな3Dエンジン・オブザーバトリー。">
+  <title>THE ENGINE</title>
   <link rel="icon" href="./favicon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="./css/style.css">
   <script defer src="./js/math.js"></script>
@@ -36,7 +36,7 @@
   </defs></svg>
   <main class="observatory" id="observatory">
     <header class="header">
-      <a class="brand" href="./" aria-label="FERRO ホーム"><span class="brand-mark"><i></i><i></i><i></i></span>FERRO<span class="trademark">™</span></a>
+      <a class="brand" href="./" aria-label="THE ENGINE ホーム"><span class="brand-mark"><i></i><i></i><i></i></span>THE ENGINE<span class="trademark">™</span></a>
       <div class="header-caption mono">ENGINE OBSERVATORY<span></span>AN INTERACTIVE STUDY</div>
       <nav class="tools" aria-label="表示設定">
         <button class="icon-button quality" id="quality" title="描画品質：標準" aria-label="描画品質：標準。押すと高品質に変更"><svg><use href="#i-star"/></svg><span id="quality-label">STD</span></button>
@@ -105,12 +105,12 @@
         <div class="control angle-control"><label for="angle" class="mono">CRANK ANGLE<output id="angle-value" for="angle">075°</output></label><input type="range" id="angle" min="0" max="720" step="1" value="75" aria-label="クランク角度。操作すると一時停止"><div class="range-ends mono"><span>0°</span><span>720°</span></div></div>
       </div>
     </section>
-    <footer class="footer mono"><span>FERRO LAB<span>/</span>THE BEAUTY OF ENGINEERING</span><span>DESIGNED TO BE EXPLORED <b>＋</b></span></footer>
+    <footer class="footer mono"><span>THE ENGINE<span>/</span>THE BEAUTY OF ENGINEERING</span><span>DESIGNED TO BE EXPLORED <b>＋</b></span></footer>
     <p id="toast" class="toast" role="status" aria-live="polite"></p>
   </main>
 
   <dialog id="about" aria-labelledby="about-title">
-    <div class="dialog-top"><span class="eyebrow mono">FERRO / FIELD NOTES</span><button class="icon-button" id="close-help" aria-label="説明を閉じる"><svg><use href="#i-close"/></svg></button></div>
+    <div class="dialog-top"><span class="eyebrow mono">THE ENGINE / FIELD NOTES</span><button class="icon-button" id="close-help" aria-label="説明を閉じる"><svg><use href="#i-close"/></svg></button></div>
     <h2 id="about-title">The beauty of<br><em>engineering.</em></h2>
     <p>機械を、ゆっくり眺めるための場所。</p><p>4本のピストン、16本のバルブ、2本のカムシャフト。ひとつのクランク角に結びついた機構を、自由な視点から観察してください。</p>
     <dl><div><dt>視点</dt><dd>ドラッグで回転。ホイール／ピンチでズーム。右ドラッグ／2本指の移動で平行移動。</dd></div><div><dt>時間</dt><dd>Space：再生／停止。角度スライダー：一時停止して任意の位置へ。</dd></div><div><dt>表示</dt><dd>1：外観　2：断面　3：分解　R：視点リセット　E：構造を探索</dd></div><div><dt>品質</dt><dd>右上の星で標準・高品質・軽量を切り替え。音はスピーカーを押したときだけ再生します。</dd></div></dl>

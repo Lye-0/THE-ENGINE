@@ -1,4 +1,4 @@
-/* FERRO — small, dependency-free column-major math library. */
+/* THE ENGINE — small, dependency-free column-major math library. */
 (function (root) {
     'use strict';
     const F = root.FERRO = root.FERRO || {};

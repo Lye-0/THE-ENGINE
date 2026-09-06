@@ -1,4 +1,4 @@
-/* FERRO UI, input, camera, accessibility and lifecycle. */
+/* THE ENGINE UI, input, camera, accessibility and lifecycle. */
 (function (F) {
     'use strict';
     const $ = s => document.querySelector(s), $$ = s => [...document.querySelectorAll(s)], { K, V } = F;
