@@ -58,15 +58,17 @@
 
     <section class="viewport" id="viewport" aria-label="インタラクティブな3Dエンジン">
       <canvas id="engine-canvas" tabindex="0" aria-label="3Dエンジン。ドラッグで回転、ホイールまたはピンチでズーム。矢印キーで回転。"></canvas>
-      <div class="inspection-views" role="group" aria-label="観察位置">
-        <button data-inspection="overview" aria-pressed="true">全体</button>
-        <button data-inspection="ignition" aria-pressed="false">点火</button>
-        <button data-inspection="combustion" aria-pressed="false">燃焼</button>
-        <button data-inspection="injection" aria-pressed="false">燃料噴射</button>
-      </div>
+
       <div class="loading" id="loading"><span class="loading-mark"></span><p class="mono">ASSEMBLING PRECISION</p><small>光と機構を組み立てています</small></div>
       <div class="hotspots" id="hotspots" hidden></div>
     </section>
+
+    <div class="inspection-views" role="group" aria-label="観察位置">
+      <button data-inspection="overview" aria-pressed="true">全体</button>
+      <button data-inspection="ignition" aria-pressed="false">点火</button>
+      <button data-inspection="combustion" aria-pressed="false">燃焼</button>
+      <button data-inspection="injection" aria-pressed="false">燃料噴射</button>
+    </div>
 
     <aside class="telemetry" aria-label="エンジンの動作状態">
       <p class="motion-state mono" id="motion-state"><span></span>MOTION ACTIVE</p>

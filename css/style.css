@@ -86,12 +86,11 @@ button svg {
   height:86px;
   display:flex;
   align-items:center;
-  border-bottom:1px solid var(--line);
   z-index:5
 }
 .inspection-views {
   position:absolute;
-  top:10px;
+  top:100px;
   left:50%;
   transform:translateX(-50%);
   display:flex;
@@ -99,7 +98,8 @@ button svg {
   padding:4px;
   border:1px solid var(--line);
   border-radius:6px;
-  background:#11191ce8;
+  background:#11191c99;
+  backdrop-filter:blur(4px);
   z-index:4;
   white-space:nowrap
 }
@@ -319,7 +319,7 @@ h1 em {
 }
 .viewport {
   position:absolute;
-  inset:11% 14% 21% 24%;
+  inset:0;
   z-index:1;
   touch-action:none
 }
@@ -541,12 +541,12 @@ h1 em {
   bottom:4.6%;
   left:36px;
   right:36px;
-  background:linear-gradient(115deg,#20272ad9,#182024d9);
+  background:linear-gradient(115deg,#20272a94,#18202494);
   border:1px solid #adc2c328;
   border-radius:7px;
   z-index:5;
   box-shadow:0 12px 45px #00000012;
-  backdrop-filter:blur(12px)
+  backdrop-filter:blur(4px)
 }
 .console-top {
   height:52px;
@@ -804,7 +804,8 @@ input[type=range]::-moz-range-thumb {
   transform:translate(-50%,8px);
   padding:10px 17px;
   border-radius:4px;
-  background:#242e31ef;
+  background:#242e31b3;
+  backdrop-filter:blur(4px);
   color:#d2dfdf;
   border:1px solid #adc2c32b;
   z-index:9;
@@ -945,7 +946,8 @@ input[type=range]::-moz-range-thumb {
   display:none!important
 }
 dialog {
-  background:linear-gradient(145deg,#202b2f,#131c20);
+  background:linear-gradient(145deg,#202b2fc4,#131c20c4);
+  backdrop-filter:blur(6px);
   color:#d7e1e3;
   border:1px solid #8da5aa40;
   border-radius:7px;
@@ -957,7 +959,7 @@ dialog {
   line-height:1.9
 }
 dialog::backdrop {
-  background:#071015b8;
+  background:#07101559;
   backdrop-filter:blur(8px)
 }
 .dialog-top {
@@ -1049,9 +1051,6 @@ dialog dd {
   .console-controls {
     height:103px
   }
-  .viewport {
-    inset:10% 14% 20% 24%
-  }
   .footer {
     inset-inline:3.4%
   }
@@ -1097,10 +1096,6 @@ dialog dd {
   }
   .angle-control {
     padding-left:2%
-  }
-  .viewport {
-    left:24%;
-    right:13%
   }
   .bore .motto {
     font-size:6px
@@ -1176,12 +1171,6 @@ dialog dd {
   }
   .canvas-caption {
     font-size:8px
-  }
-  .viewport {
-    left:22%;
-    right:12%;
-    top:16%;
-    bottom:22%
   }
   .bore .motto {
     display:none
@@ -1337,12 +1326,6 @@ dialog dd {
   }
   .cycle-monitor {
     display:none
-  }
-  .viewport {
-    left:-4%;
-    right:-4%;
-    top:31%;
-    bottom:25%;
   }
   .ghost-type {
     left:4%;
@@ -1559,10 +1542,6 @@ dialog dd {
   .is-exploring .telemetry {
     display:none
   }
-  .is-exploring .viewport {
-    top:32%;
-    bottom:24%
-  }
   .hotspot {
     width:23px;
     height:23px;
@@ -1674,10 +1653,6 @@ dialog dd {
   .cycle-monitor {
     bottom:0
   }
-  .viewport {
-    top:9%;
-    bottom:25%
-  }
   .console {
     bottom:5%
   }
@@ -1741,10 +1716,6 @@ dialog dd {
   .telemetry {
     top:107px
   }
-  .viewport {
-    top:32%;
-    bottom:30%
-  }
   .console {
     bottom:4.7%
   }
@@ -1767,10 +1738,6 @@ dialog dd {
   }
   .part-description {
     font-size:9px
-  }
-  .is-exploring .viewport {
-    top:33%;
-    bottom:28%
   }
   .toast {
     bottom:31%
@@ -1822,9 +1789,6 @@ dialog dd {
   }
   .cycle-monitor {
     display:none
-  }
-  .viewport {
-    inset:11% 15% 25% 22%
   }
   .console {
     bottom:5%;
@@ -1952,17 +1916,10 @@ dialog dd {
   .part-description {
     max-width:100%
   }
-  .is-exploring .viewport {
-    top:max(32%,275px)
-  }
-}
-@media(max-height:720px) and (max-width:700px) {
-  .is-exploring .viewport {
-    top:max(33%,270px)
-  }
 }
 
-/* Portrait tablets: keep typography above the engine, rather than behind it. */
+
+/* Portrait tablets keep their text and controls in the foreground. */
 @media (min-width:701px) and (max-width:1100px) and (orientation:portrait) {
   .header-caption { display:none; }
   .introduction { top:110px;left:30px;right:30px;bottom:auto;width:auto;height:245px; }
@@ -1974,7 +1931,6 @@ dialog dd {
   .bore { display:none; }
   .telemetry { top:143px;right:31px;bottom:auto;width:190px; }
   .cycle-monitor { display:none; }
-  .viewport { left:2%;right:2%;top:31%;bottom:22%; }
   .canvas-caption { left:20px;right:20px;bottom:20.3%;font-size:10px; }
   .view-tools { right:25px;bottom:25%; }
   .mode-caption { display:none; }
@@ -1982,19 +1938,55 @@ dialog dd {
   .part-index,.part-fact { display:none; }
   .part-description { margin-top:13px;font-size:12px;max-width:100%; }
   .part-nav { align-self:flex-end;margin-top:7px; }
-  .is-exploring .viewport { top:31%;bottom:22%; }
   .is-exploring .telemetry { display:none; }
 }
 @media (max-height:500px) and (min-width:601px) {
   .footer { display:none; }
 }
 
-/* Close observation uses the available canvas without text over the mechanism. */
+/* Close observation keeps its compact controls in the foreground. */
 .is-inspecting .introduction,.is-inspecting .telemetry,.is-inspecting .ghost-type,.is-inspecting .mode-caption { visibility:hidden; }
-.is-inspecting .viewport { top:96px;left:3%;right:3%; }
+
+
+
+/* Text passes pointer input through to the scene; controls remain interactive. */
+.header,.footer,.mode-caption {
+  pointer-events:none
+}
+.header a,.header button {
+  pointer-events:auto
+}
+.ghost-type,.footer,.mode-caption {
+  z-index:2
+}
+.header,.introduction,.telemetry,.footer,.mode-caption,.canvas-caption {
+  text-shadow:0 1px 3px #071012,0 0 12px #071012b3
+}
+.part-panel {
+  background:#11191c99;
+  backdrop-filter:blur(4px);
+  padding:12px 14px;
+  border-radius:6px
+}
+.inspection-views {
+  pointer-events:auto
+}
+@media(max-height:740px) and (min-width:701px) {
+  .inspection-views { top:77px; }
+}
 @media(max-width:700px) {
-  .is-inspecting .viewport { top:77px;left:0;right:0; }
+  .inspection-views { top:286px; }
+  .part-panel { padding:8px 12px; }
+  .is-inspecting .inspection-views { top:81px; }
+}
+@media(max-height:720px) and (max-width:700px) {
+  .inspection-views { top:254px; }
+  .is-inspecting .inspection-views { top:81px; }
+}
+@media(min-width:701px) and (max-width:1100px) and (orientation:portrait) {
+  .inspection-views { top:365px; }
+  .is-inspecting .inspection-views { top:96px; }
 }
 @media(max-height:500px) and (min-width:601px) {
-  .is-inspecting .viewport { top:57px; }
+  .inspection-views,.is-inspecting .inspection-views { top:61px; }
 }
