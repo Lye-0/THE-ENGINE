@@ -1,0 +1,122 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#111617">
+  <meta name="description" content="FERRO — 精密な直列4気筒エンジンを、回し、開き、観察する。インタラクティブな3Dエンジン・オブザーバトリー。">
+  <title>FERRO — Engine Observatory</title>
+  <link rel="icon" href="./favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="./css/style.css">
+  <script defer src="./js/math.js"></script>
+  <script defer src="./js/kinematics.js"></script>
+  <script defer src="./js/geometry.js"></script>
+  <script defer src="./js/renderer.js"></script>
+  <script defer src="./js/engine.js"></script>
+  <script defer src="./js/audio.js"></script>
+  <script defer src="./js/app.js"></script>
+</head>
+<body>
+  <svg class="icon-defs" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><defs>
+    <symbol id="i-cube" viewBox="0 0 24 24"><path d="m12 3 9 5v8l-9 5-9-5V8Zm0 0v9m-9-4 9 4 9-4m-9 4v9"/></symbol>
+    <symbol id="i-cut" viewBox="0 0 24 24"><path d="m12 3 9 5v8l-9 5-9-5V8Zm-9 5 9 4 9-4M12 12v9M3 16l9-13 9 13"/></symbol>
+    <symbol id="i-layers" viewBox="0 0 24 24"><path d="m12 3 10 5-10 5L2 8Zm-10 9 10 5 10-5M2 16l10 5 10-5"/></symbol>
+    <symbol id="i-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 11v6m0-11v2"/></symbol>
+    <symbol id="i-volume" viewBox="0 0 24 24"><path d="M11 4 6 8H3v8h3l5 4Zm4 4c3 2 3 6 0 8m3-11c5 4 5 10 0 14"/></symbol>
+    <symbol id="i-mute" viewBox="0 0 24 24"><path d="M11 4 6 8H3v8h3l5 4Zm5 5 6 6m0-6-6 6"/></symbol>
+    <symbol id="i-expand" viewBox="0 0 24 24"><path d="M8 3H3v5m13-5h5v5M3 16v5h5m8 0h5v-5"/></symbol>
+    <symbol id="i-reset" viewBox="0 0 24 24"><path d="M4 10a8 8 0 1 1 1 8M4 4v6h6"/></symbol>
+    <symbol id="i-orbit" viewBox="0 0 24 24"><ellipse cx="12" cy="12" rx="11" ry="5" transform="rotate(-35 12 12)"/><circle cx="12" cy="12" r="3"/><path d="m19 3 2 1-1 3"/></symbol>
+    <symbol id="i-star" viewBox="0 0 24 24"><path d="m12 2 3 7 7 1-5 5 1 7-6-4-6 4 1-7-5-5 7-1Z"/></symbol>
+    <symbol id="i-arrow" viewBox="0 0 24 24"><path d="M4 12h15m-6-6 6 6-6 6"/></symbol>
+    <symbol id="i-close" viewBox="0 0 24 24"><path d="m5 5 14 14m0-14L5 19"/></symbol>
+    <symbol id="i-pause" viewBox="0 0 24 24"><path d="M8 6v12M16 6v12" stroke-width="3"/></symbol>
+    <symbol id="i-play" viewBox="0 0 24 24"><path d="m8 5 11 7-11 7Z" fill="currentColor" stroke="none"/></symbol>
+    <symbol id="i-chev" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></symbol>
+  </defs></svg>
+  <main class="observatory" id="observatory">
+    <header class="header">
+      <a class="brand" href="./" aria-label="FERRO ホーム"><span class="brand-mark"><i></i><i></i><i></i></span>FERRO<span class="trademark">™</span></a>
+      <div class="header-caption mono">ENGINE OBSERVATORY<span></span>AN INTERACTIVE STUDY</div>
+      <nav class="tools" aria-label="表示設定">
+        <button class="icon-button quality" id="quality" title="描画品質：標準" aria-label="描画品質：標準。押すと高品質に変更"><svg><use href="#i-star"/></svg><span id="quality-label">STD</span></button>
+        <button class="icon-button" id="sound" title="エンジン音" aria-label="エンジン音をオン" aria-pressed="false"><svg><use href="#i-mute"/></svg></button>
+        <button class="icon-button" id="fullscreen" title="全画面表示" aria-label="全画面表示"><svg><use href="#i-expand"/></svg></button>
+        <button class="icon-button" id="help" title="この作品について" aria-label="この作品について"><svg><use href="#i-info"/></svg></button>
+      </nav>
+    </header>
+
+    <div class="ghost-type" aria-hidden="true">I / 4</div>
+    <section class="introduction" id="intro">
+      <p class="eyebrow mono"><span></span>STUDY NO. 001</p>
+      <h1>Power.<br><em>Revealed.</em></h1>
+      <p class="intro-copy">力を生む、その内側へ。<br>精密な機構が刻む、金属の鼓動。</p>
+      <div class="engine-spec"><span class="tiny-line"></span><div><h2 class="mono">INLINE–FOUR</h2><p class="mono">2.0 L / DOHC / 16V</p></div></div>
+      <button class="explore-link" id="explore" aria-expanded="false">構造を探索する<svg><use href="#i-arrow"/></svg></button>
+      <div class="bore"><p>86 × 86 <small>mm</small></p><span class="mono">BORE × STROKE</span><span class="motto mono">CAST. MACHINED. IN MOTION.</span></div>
+    </section>
+
+    <section class="viewport" id="viewport" aria-label="インタラクティブな3Dエンジン">
+      <canvas id="engine-canvas" tabindex="0" aria-label="3Dエンジン。ドラッグで回転、ホイールまたはピンチでズーム。矢印キーで回転。"></canvas>
+      <div class="loading" id="loading"><span class="loading-mark"></span><p class="mono">ASSEMBLING PRECISION</p><small>光と機構を組み立てています</small></div>
+      <div class="hotspots" id="hotspots" hidden></div>
+    </section>
+
+    <aside class="telemetry" aria-label="エンジンの動作状態">
+      <p class="motion-state mono" id="motion-state"><span></span>MOTION ACTIVE</p>
+      <p class="rpm-display"><span id="rpm-readout">1,200</span><small class="mono">RPM</small></p>
+      <p class="slow-label mono" id="slow-label">SLOW MOTION · 1/40 SPEED</p>
+      <div class="cycle-monitor">
+        <div class="cycle-head mono"><span>THE FOUR-STROKE CYCLE</span><span>720°</span></div>
+        <div class="cylinder-states" id="cylinder-states"></div>
+        <div class="firing-order mono"><span>FIRING ORDER</span><b>1 — 3 — 4 — 2</b></div>
+      </div>
+    </aside>
+
+    <aside class="part-panel" id="part-panel" hidden>
+      <div class="part-top"><span class="mono" id="part-kicker">01 / THE RECIPROCATING ASSEMBLY</span><button class="icon-button" id="close-part" aria-label="構造の説明を閉じる"><svg><use href="#i-close"/></svg></button></div>
+      <div class="part-content">
+      <span class="part-index" id="part-index">01</span>
+      <h2 id="part-title">ピストン</h2><p class="part-en mono" id="part-en">PISTON ASSEMBLY</p>
+      <p class="part-description" id="part-description"></p>
+      <div class="part-fact" id="part-fact"></div>
+      </div>
+      <div class="part-nav"><button id="part-prev" aria-label="前の部品">←</button><span class="mono" id="part-page">01 / 05</span><button id="part-next" aria-label="次の部品">→</button></div>
+    </aside>
+
+    <div class="view-tools"><button class="icon-button" id="orbit" title="自動回転" aria-label="自動回転" aria-pressed="false"><svg><use href="#i-orbit"/></svg></button><button class="icon-button" id="reset" title="視点をリセット" aria-label="視点をリセット"><svg><use href="#i-reset"/></svg></button><span class="mono">VIEW</span></div>
+    <div class="canvas-caption"><svg><use href="#i-orbit"/></svg><span>ドラッグで回転<span class="desktop-hint"> · ピンチ／スクロールでズーム</span></span></div>
+    <div class="mode-caption mono"><span id="mode-number">02</span><span id="mode-name">CUTAWAY VIEW</span><i></i></div>
+
+    <section class="console" aria-label="エンジン操作パネル">
+      <div class="console-top">
+        <div class="view-tabs" role="group" aria-label="表示モード">
+          <button data-mode="exterior" aria-pressed="false"><svg><use href="#i-cube"/></svg><span>外観</span><small class="mono">01</small></button>
+          <button class="active" data-mode="cutaway" aria-pressed="true"><svg><use href="#i-cut"/></svg><span>断面</span><small class="mono">02</small></button>
+          <button data-mode="exploded" aria-pressed="false"><svg><use href="#i-layers"/></svg><span>分解</span><small class="mono">03</small></button>
+        </div>
+        <span class="console-tag mono">REAL-TIME 3D<span>/</span>PRECISION IN MOTION</span>
+        <button class="toggle" id="combustion" aria-pressed="true"><span class="switch"></span>燃焼を可視化</button>
+      </div>
+      <div class="console-controls">
+        <button class="play-button" id="play" aria-label="一時停止" aria-pressed="true"><svg><use href="#i-pause"/></svg></button>
+        <div class="control rpm-control"><label for="rpm" class="mono">ENGINE SPEED<output id="rpm-value" for="rpm">1,200 <small>rpm</small></output></label><input type="range" min="800" max="6000" step="50" value="1200" id="rpm" aria-label="エンジン回転数"><div class="range-ends mono"><span>IDLE / 800</span><span>6,000</span></div></div>
+        <div class="control speed-control"><label for="speed" class="mono">PLAYBACK SPEED</label><div class="select-wrap"><select id="speed" aria-label="再生速度"><option value="0.0125">1/80　超スロー</option><option value="0.025" selected>1/40　鑑賞モード</option><option value="0.1">1/10　スローモーション</option><option value="1">1×　実時間</option></select><svg><use href="#i-chev"/></svg></div></div>
+        <div class="control angle-control"><label for="angle" class="mono">CRANK ANGLE<output id="angle-value" for="angle">075°</output></label><input type="range" id="angle" min="0" max="720" step="1" value="75" aria-label="クランク角度。操作すると一時停止"><div class="range-ends mono"><span>0°</span><span>720°</span></div></div>
+      </div>
+    </section>
+    <footer class="footer mono"><span>FERRO LAB<span>/</span>THE BEAUTY OF ENGINEERING</span><span>DESIGNED TO BE EXPLORED <b>＋</b></span></footer>
+    <p id="toast" class="toast" role="status" aria-live="polite"></p>
+  </main>
+
+  <dialog id="about" aria-labelledby="about-title">
+    <div class="dialog-top"><span class="eyebrow mono">FERRO / FIELD NOTES</span><button class="icon-button" id="close-help" aria-label="説明を閉じる"><svg><use href="#i-close"/></svg></button></div>
+    <h2 id="about-title">The beauty of<br><em>engineering.</em></h2>
+    <p>機械を、ゆっくり眺めるための場所。</p><p>4本のピストン、16本のバルブ、2本のカムシャフト。ひとつのクランク角に結びついた機構を、自由な視点から観察してください。</p>
+    <dl><div><dt>視点</dt><dd>ドラッグで回転。ホイール／ピンチでズーム。右ドラッグ／2本指の移動で平行移動。</dd></div><div><dt>時間</dt><dd>Space：再生／停止。角度スライダー：一時停止して任意の位置へ。</dd></div><div><dt>表示</dt><dd>1：外観　2：断面　3：分解　R：視点リセット　E：構造を探索</dd></div><div><dt>品質</dt><dd>右上の星で標準・高品質・軽量を切り替え。音はスピーカーを押したときだけ再生します。</dd></div></dl>
+    <p class="note">この作品は架空の2.0 L直列4気筒エンジンを題材にした、鑑賞用の手続き型3Dモデルです。ピストンはスライダークランク式で連動し、カムシャフトはクランクの半速で回転します。バルブタイミング、カム形状、燃焼色、分解位置、音は観察用に理想化しています。特定製品のCADや、熱・流体・応力を解く工学シミュレーションではありません。</p>
+    <span class="dialog-foot mono">NO EXTERNAL ASSETS. JUST GEOMETRY, LIGHT & MOTION.</span>
+  </dialog>
+  <noscript><div class="error-message">この作品を動かすにはJavaScriptを有効にしてください。</div></noscript>
+</body>
+</html>

@@ -1,0 +1,13 @@
+{
+  "name": "ferro-engine-observatory",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Dependency-free, interactive WebGL2 inline-four engine observatory",
+  "scripts": {
+    "start": "node scripts/serve.mjs",
+    "dev": "node scripts/serve.mjs",
+    "test": "node --test tests/kinematics.test.cjs tests/geometry.test.cjs tests/server.test.cjs tests/site.test.cjs",
+    "preview:build": "node scripts/build-preview.mjs"
+  },
+  "engines": {"node": ">=20"}
+}

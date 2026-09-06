@@ -1,0 +1,68 @@
+{
+  "screenshots": [
+    {
+      "name": "desktop-final",
+      "width": 1440,
+      "height": 960,
+      "overflow": false,
+      "glError": 0,
+      "introHidden": false,
+      "parts": 1313
+    },
+    {
+      "name": "exterior-final",
+      "width": 1440,
+      "height": 960,
+      "overflow": false,
+      "glError": 0,
+      "introHidden": false,
+      "parts": 1685
+    },
+    {
+      "name": "exploded-final",
+      "width": 1440,
+      "height": 960,
+      "overflow": false,
+      "glError": 0,
+      "introHidden": false,
+      "parts": 1292
+    },
+    {
+      "name": "mobile-final",
+      "width": 390,
+      "height": 844,
+      "overflow": false,
+      "glError": 0,
+      "introHidden": false,
+      "parts": 1313
+    },
+    {
+      "name": "tablet-final",
+      "width": 820,
+      "height": 1180,
+      "overflow": false,
+      "glError": 0,
+      "introHidden": false,
+      "parts": 1313
+    },
+    {
+      "name": "landscape-final",
+      "width": 844,
+      "height": 390,
+      "overflow": false,
+      "glError": 0,
+      "introHidden": false,
+      "parts": 1313
+    },
+    {
+      "name": "mobile-explore-final",
+      "width": 390,
+      "height": 844,
+      "overflow": false,
+      "glError": 0,
+      "introHidden": true,
+      "parts": 1313
+    }
+  ],
+  "errors": []
+}
