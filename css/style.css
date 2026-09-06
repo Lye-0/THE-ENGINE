@@ -721,6 +721,14 @@ h1 em {
   cursor:pointer;
   height:32px
 }
+.select-wrap select option {
+  background:#172025;
+  color:#dce2e2
+}
+.select-wrap select option:checked {
+  background:#394348;
+  color:#f2d5bd
+}
 .select-wrap svg {
   position:absolute;
   right:9px;
@@ -1971,22 +1979,30 @@ dialog dd {
 .inspection-views {
   pointer-events:auto
 }
+@media(max-width:900px) {
+  .inspection-views { top:87px; }
+}
 @media(max-height:740px) and (min-width:701px) {
   .inspection-views { top:77px; }
 }
 @media(max-width:700px) {
-  .inspection-views { top:286px; }
-  .part-panel { padding:8px 12px; }
-  .is-inspecting .inspection-views { top:81px; }
+  .inspection-views { top:81px; }
+  .introduction { top:145px; }
+  .telemetry { top:179px; }
+  .part-panel { top:145px;padding:8px 12px; }
 }
 @media(max-height:720px) and (max-width:700px) {
-  .inspection-views { top:254px; }
-  .is-inspecting .inspection-views { top:81px; }
+  .introduction { top:141px; }
+  .telemetry { top:165px; }
+  .part-panel { top:141px; }
 }
 @media(min-width:701px) and (max-width:1100px) and (orientation:portrait) {
-  .inspection-views { top:365px; }
-  .is-inspecting .inspection-views { top:96px; }
+  .introduction,.part-panel { top:151px; }
+  .telemetry { top:184px; }
 }
 @media(max-height:500px) and (min-width:601px) {
-  .inspection-views,.is-inspecting .inspection-views { top:61px; }
+  .inspection-views { top:61px; }
+  .introduction { top:70px; }
+  .telemetry { top:73px; }
+  .part-panel { top:66px; }
 }
