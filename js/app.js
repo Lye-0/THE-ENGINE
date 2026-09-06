@@ -22,10 +22,10 @@
         } }
         focus(kind) {
             this.inspection = kind; this.auto = false;
-            const ignition = kind === 'ignition', aspect = this.canvas.clientWidth / Math.max(1, this.canvas.clientHeight);
-            this.targetGoal = ignition ? [-2.175, K.HEAD.sparkY - K.HEAD.sparkGap / 2, 0] : [-.725, 3.24, -.85];
-            this.yaw = ignition ? 0 : Math.PI + .72; this.pitch = ignition ? -.18 : .91;
-            this.radiusGoal = (ignition ? .58 : 2.7) * Math.max(1, .70 / aspect);
+            const ignition = kind === 'ignition', combustion = kind === 'combustion', aspect = this.canvas.clientWidth / Math.max(1, this.canvas.clientHeight);
+            this.targetGoal = ignition ? [-2.175, K.HEAD.sparkY - K.HEAD.sparkGap / 2, 0] : combustion ? [-2.175, 2.64, 0] : [-.725, 3.24, -.85];
+            this.yaw = ignition ? 0 : combustion ? -.34 : Math.PI + .72; this.pitch = ignition ? -.18 : combustion ? .14 : .91;
+            this.radiusGoal = (ignition ? .58 : combustion ? 2.2 : 2.7) * Math.max(1, (combustion ? .95 : .70) / aspect);
         }
         bind() { const c = this.canvas; c.addEventListener('contextmenu', e => e.preventDefault()); c.addEventListener('pointerdown', e => { c.setPointerCapture(e.pointerId); this.pointers.set(e.pointerId, { x: e.clientX, y: e.clientY, button: e.button }); this.auto = false; document.dispatchEvent(new Event('ferro:orbit-stopped')); }); c.addEventListener('pointermove', e => { const old = this.pointers.get(e.pointerId); if (!old)
             return; const before = [...this.pointers.values()].map(p => ({ ...p })); this.pointers.set(e.pointerId, { ...old, x: e.clientX, y: e.clientY }); if (this.pointers.size === 1) {
@@ -90,12 +90,12 @@
                 toast('実時間：動きが速いため、構造の観察には1/40がおすすめです'); }
             function selectPart(index) { state.part = K.wrap(index, PARTS.length); const p = PARTS[state.part]; $('#part-kicker').textContent = String(state.part + 1).padStart(2, '0') + ' / ' + p.kicker; $('#part-index').textContent = String(state.part + 1).padStart(2, '0'); $('#part-title').textContent = p.name; $('#part-en').textContent = p.en; $('#part-description').textContent = p.body; $('#part-fact').innerHTML = p.fact; $('#part-page').textContent = String(state.part + 1).padStart(2, '0') + ' / ' + String(PARTS.length).padStart(2, '0'); $$('.hotspot').forEach((b, i) => { b.classList.toggle('active', i === state.part); b.setAttribute('aria-pressed', String(i === state.part)); }); if (p.inspection) setInspection(p.inspection); }
             function setInspection(kind) {
-                if (!['overview', 'ignition', 'injection'].includes(kind)) return;
+                if (!['overview', 'ignition', 'combustion', 'injection'].includes(kind)) return;
                 if (kind === 'overview') camera.frame(state.mode, true);
                 else {
                     if (state.mode !== 'cutaway') setMode('cutaway');
                     state.combustion = true; $('#combustion').setAttribute('aria-pressed', 'true');
-                    const phase = kind === 'ignition' ? K.ignitionAt(0, state.rpm).start + state.rpm / 60 * K.TAU * .00008 : 380 * K.DEG + state.rpm / 60 * K.TAU * .0026;
+                    const phase = kind === 'ignition' ? K.ignitionAt(0, state.rpm).start + state.rpm / 60 * K.TAU * .00008 : kind === 'combustion' ? 24 * K.DEG : 380 * K.DEG + state.rpm / 60 * K.TAU * .0026;
                     setAngle(K.wrap(phase + (kind === 'injection' ? K.FIRING_OFFSETS[1] : 0)) / K.DEG);
                     camera.focus(kind);
                 }

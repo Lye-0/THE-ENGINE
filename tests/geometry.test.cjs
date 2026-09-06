@@ -173,6 +173,27 @@ test('shared port inlets keep a clear bore in full and sectioned geometry',()=>{
   }
  }
 });
+test('combustion volume follows each piston crown and lighting stops with effects or detached parts',()=>{
+ engine.reducedMotion=true;engine.setMode('cutaway');
+ for(let deg=0;deg<720;deg+=5){
+  engine.update(deg*K.DEG,.016,true);
+  engine.gases.forEach((gas,i)=>{
+   const state=K.cylinderAt(deg*K.DEG,i),burn=K.combustionAt(state.phase),chamber=gas.material.chamber;
+   close(chamber[0],engine.xs[i]);close(chamber[1],state.y+K.HEAD.pistonCrown+.002);
+   close(gas.p[1]-gas.s[1]/2,chamber[1]);close(gas.p[1]+gas.s[1]/2,K.ROOF_Y);
+   close(gas.material.burnShape[0]*gas.s[1],burn.referenceHeight);
+   assert.ok(gas.material.burn.every(Number.isFinite));
+   close(engine.combustionLights[i*4+3],burn.light);
+  });
+ }
+ for(const [mode,effects] of [['cutaway',false],['exterior',true],['exploded',true]]){
+  engine.setMode(mode);engine.update(24*K.DEG,.016,effects);
+  assert.ok(engine.gases.every(g=>!g.visible));
+  for(let i=0;i<4;i++){close(engine.combustionLights[i*4+3],0);close(engine.ignitionLights[i*4+3],0);}
+ }
+ engine.setMode('cutaway');engine.update(24*K.DEG,.016,true);
+ assert.ok(engine.gases[0].visible&&engine.combustionLights[3]>0);
+});
 test('both injector spray cones have clear passages through each intake fork',()=>{
  for(const injector of engine.injectors){
   const port=engine.portPassages.find(p=>p.i===injector.i&&p.side===-1);

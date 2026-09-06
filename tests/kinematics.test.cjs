@@ -101,6 +101,63 @@ test('port injection and its travelling spray remain inside the open intake even
 test('camshaft rotates at exactly half the crankshaft angular speed',()=>{
  close(K.camAngle(K.CYCLE),K.TAU);close(K.camAngle(1.234),.617);
 });
+test('combustion starts after its spark, propagates with closed valves, then cools during expansion',()=>{
+ for(const rpm of [800,1200,3000,6000]){
+  const spark=K.ignitionAt(0,rpm),omega=rpm/60*K.TAU;
+  for(const phase of [spark.start-.001,spark.start+omega*.0001,180*K.DEG,360*K.DEG,540*K.DEG]){
+   const b=K.combustionAt(phase,rpm);assert.equal(b.visible,false);close(b.fraction,0);close(b.light,0);
+  }
+  let fraction=0,radius=0;
+  for(let t=.00016*omega;t<spark.advance+50*K.DEG;t+=.5*K.DEG){
+   const phase=spark.start+t,b=K.combustionAt(phase,rpm);
+   assert.ok(b.visible&&b.fraction>=fraction&&b.radius>=radius);
+   assert.ok(b.fraction>=0&&b.fraction<=1&&b.height>0&&b.front>=0&&b.front<=1);
+   close(K.valveLift(phase,'intake'),0);close(K.valveLift(phase,'exhaust'),0);
+   fraction=b.fraction;radius=b.radius;
+  }
+  let heat=Infinity;
+  for(let angle=60;angle<148;angle++){
+   const b=K.combustionAt(angle*K.DEG,rpm);close(b.fraction,1);close(b.front,0);
+   assert.ok(b.heat<heat&&b.light>=0);heat=b.heat;
+  }
+ }
+});
+test('combustion repeats every 720 degrees in firing order and reverses deterministically when scrubbing',()=>{
+ for(let angle=0;angle<720;angle+=3){
+  const active=[];
+  for(let i=0;i<4;i++){
+   const phase=K.cylinderAt(angle*K.DEG,i).phase,b=K.combustionAt(phase);
+   const next=K.combustionAt(phase+K.CYCLE);
+   for(const key of ['fraction','floor','height','radius','front','heat'])close(b[key],next[key]);
+   if(b.front>0)active.push(i);
+  }
+  assert.ok(active.length<=1);
+ }
+ for(const i of [0,2,3,1]){
+  const angle=K.FIRING_OFFSETS[i]+12*K.DEG;
+  assert.ok(K.combustionAt(K.cylinderAt(angle,i).phase).front>0);
+ }
+ const initial=K.combustionAt(5*K.DEG);K.combustionAt(60*K.DEG);
+ assert.deepEqual(K.combustionAt(5*K.DEG),initial);
+});
+test('gas dilution conserves the reference charge across the moving pent-roof chamber',()=>{
+ // Numerically integrate the actual sloping roof independently of the analytic volume formula.
+ const volume=floor=>{
+  let v=0;const dz=2*K.HEAD.bore/1000;
+  for(let n=0;n<1000;n++){
+   const z=-K.HEAD.bore+(n+.5)*dz;
+   v+=2*Math.sqrt(K.HEAD.bore**2-z*z)*(K.chamberRoof(z)-floor)*dz;
+  }
+  return v;
+ };
+ for(const rpm of [800,1200,6000]){
+  const spark=K.ignitionAt(0,rpm),start=K.combustionAt(spark.start,rpm),mass=volume(start.floor);
+  for(const angle of [0,20,45,75,100]){
+   const b=K.combustionAt(angle*K.DEG,rpm);
+   assert.ok(Math.abs(volume(b.floor)*b.density/mass-1)<.00004);
+  }
+ }
+});
 test('RPM and presentation speed are independent, explicit time scales',()=>{
  close(K.advance(0,.01,1200,1),.4*Math.PI);
  close(K.advance(0,.01,1200,.025),.01*Math.PI);

@@ -67,10 +67,7 @@
         const age = wrap(phase + advance), seconds = age / omega, duration = .0012;
         const active = seconds < duration;
         const intensity = active ? (.45 + .55 * Math.exp(-seconds / .00022)) * (1 - (seconds / duration) ** 4) : 0;
-        const burnDuration = (advance / DEG + 48) * DEG;
-        const burn = Math.max(0, Math.min(1, (age - omega * .00015) / burnDuration));
-        return { active, intensity, age, seconds, advance, duration, burn,
-            burning: seconds >= .00015 && age < burnDuration, start: CYCLE - advance };
+        return { active, intensity, age, seconds, advance, duration, start: CYCLE - advance };
     }
     function injectionAt(phase, rpm = 1200) {
         const omega = Math.max(800, Math.min(6000, rpm)) / 60 * TAU;
@@ -78,12 +75,35 @@
         return { active: age < duration, visible: age < duration + flight, age, duration, flight,
             front: Math.min(1, age / flight), tail: Math.max(0, (age - duration) / flight) };
     }
+    // Prescribed premixed burn for visualization, followed by expansion cooling.
+    // This is phase driven; it neither integrates pressure nor drives the crank.
+    function combustionAt(phase, rpm = 1200) {
+        const ignition = ignitionAt(phase, rpm), omega = Math.max(800, Math.min(6000, rpm)) / 60 * TAU;
+        const elapsed = ignition.age - omega * .00015, duration = ignition.advance + 44 * DEG;
+        const progress = Math.max(0, Math.min(1, elapsed / duration));
+        const fraction = (1 - Math.exp(-6.9 * progress ** 3)) / (1 - Math.exp(-6.9));
+        const floor = pistonAt(phase).y + HEAD.pistonCrown + .002;
+        const startFloor = pistonAt(-ignition.advance).y + HEAD.pistonCrown + .002;
+        const height = ROOF_Y - floor, referenceHeight = ROOF_Y - startFloor;
+        const meanRoofDrop = 4 * HEAD.bore * Math.tan(HEAD.tilt) / (3 * Math.PI);
+        const density = (referenceHeight - meanRoofDrop) / (height - meanRoofDrop);
+        const sinceTDC = ignition.age - ignition.advance;
+        const cool = Math.max(0, Math.min(1, (sinceTDC - 75 * DEG) / (73 * DEG)));
+        const fade = 1 - cool * cool * (3 - 2 * cool);
+        const visible = elapsed > 0 && sinceTDC < 148 * DEG;
+        const heat = visible ? Math.pow(density, .32) * fade : 0;
+        const frontFade = Math.max(0, Math.min(1, (1 - progress) / .18));
+        return { visible, progress, fraction: visible ? fraction : 0, floor, height, referenceHeight,
+            radius: .001 + .70 * Math.sqrt(fraction), front: visible ? frontFade : 0,
+            heat, density, light: visible ? Math.min(1, fraction * 3) * heat : 0,
+            time: ignition.age, originY: HEAD.sparkY - HEAD.sparkGap / 2 };
+    }
     function advance(angle, dt, rpm, scale) {
         if (![angle, dt, rpm, scale].every(Number.isFinite)) throw new TypeError('Finite motion inputs required.');
         return wrap(angle + Math.max(0, dt) * Math.max(0, rpm) / 60 * TAU * Math.max(0, scale));
     }
     const K = Object.freeze({ TAU, CYCLE, DEG, CRANK_RADIUS, ROD_LENGTH, MM_PER_UNIT, HEAD, CAM_Y, CAM_Z, ROOF_Y, SPRING,
-        VALVE_EVENTS, FIRING_OFFSETS, STAGES, wrap, pistonAt, valveMotion, valveLift, cylinderAt, ignitionAt, injectionAt,
+        VALVE_EVENTS, FIRING_OFFSETS, STAGES, wrap, pistonAt, valveMotion, valveLift, cylinderAt, ignitionAt, injectionAt, combustionAt,
         advance, camAngle: angle => angle / 2, chamberRoof: z => ROOF_Y - Math.abs(z) * Math.tan(HEAD.tilt) });
     (root.FERRO = root.FERRO || {}).K = K;
     if (typeof module !== 'undefined' && module.exports) module.exports = K;

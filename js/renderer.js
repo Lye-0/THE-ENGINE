@@ -25,6 +25,8 @@ uniform vec3 uCamera;uniform mat4 uView;uniform vec3 uColor;uniform float uMetal
 uniform sampler2D uShadow;uniform sampler2D uMap;uniform float uUseMap;uniform float uShadowTexel;uniform int uQuality;
 uniform vec4 uIgnitionLights[4];uniform vec4 uChamber;uniform vec3 uFlow;uniform float uChamberSlope;
 uniform vec4 uSprayOrigin;uniform vec3 uSprayAxis;
+uniform vec4 uBurn;uniform vec4 uBurnShape;uniform vec4 uCombustionLights[4];uniform vec2 uCombustionBounds;
+uniform sampler2D uOpaqueDepth;uniform mat4 uInverseVP;uniform vec2 uViewport;
 const float PI=3.14159265359;
 float hash(vec3 p){p=fract(p*.1031);p+=dot(p,p.yzx+33.33);return fract((p.x+p.y)*p.z);}
 float noise(vec3 x){vec3 i=floor(x),f=fract(x);f=f*f*(3.-2.*f);return mix(mix(mix(hash(i),hash(i+vec3(1,0,0)),f.x),mix(hash(i+vec3(0,1,0)),hash(i+vec3(1,1,0)),f.x),f.y),mix(mix(hash(i+vec3(0,0,1)),hash(i+vec3(1,0,1)),f.x),mix(hash(i+vec3(0,1,1)),hash(i+vec3(1,1,1)),f.x),f.y),f.z);}
@@ -39,7 +41,48 @@ vec3 fresnel(float v,vec3 f0){return f0+(1.0-f0)*pow(clamp(1.0-v,0.0,1.0),5.0);}
 vec3 lightBRDF(vec3 n,vec3 v,vec3 l,vec3 radiance,vec3 color,float rough,float metal){vec3 h=normalize(v+l);float nv=max(dot(n,v),.001),nl=max(dot(n,l),0.0),nh=max(dot(n,h),0.0),hv=max(dot(h,v),0.0);float a=rough*rough,a2=a*a,den=nh*nh*(a2-1.)+1.,D=a2/(PI*den*den+.00001);float k=(rough+1.)*(rough+1.)/8.,G=(nv/(nv*(1.-k)+k))*(nl/(nl*(1.-k)+k));vec3 ff=fresnel(hv,mix(vec3(.04),color,metal));vec3 spec=D*G*ff/(4.*nv*max(nl,.001)+.0001);return ((1.-ff)*(1.-metal)*color/PI+spec)*radiance*nl;}
 float shadow(vec3 n){vec3 p=vShadow.xyz/vShadow.w*.5+.5;if(p.z<0.||p.z>1.||p.x<0.||p.x>1.||p.y<0.||p.y>1.)return 1.;float bias=max(.00035,.0010*(1.-max(dot(n,normalize(vec3(-4,8,5))),0.)));float sum=0.;for(int x=-1;x<=1;x++)for(int y=-1;y<=1;y++){float dd=texture(uShadow,p.xy+vec2(float(x),float(y))*uShadowTexel*1.4).r;sum+=p.z-bias>dd?0.:1.;}return mix(.23,1.,sum/9.);}
 vec3 aces(vec3 x){return clamp((x*(2.51*x+.03))/(x*(2.43*x+.59)+.14),0.,1.);}
+bool clipPlane(vec3 n,float limit,vec3 origin,vec3 ray,inout vec2 interval){
+ float speed=dot(n,ray),gap=limit-dot(n,origin);
+ if(abs(speed)<.00001)return gap>=0.;
+ float t=gap/speed;if(speed>0.)interval.y=min(interval.y,t);else interval.x=max(interval.x,t);
+ return interval.y>interval.x;
+}
+vec4 chamberVolume(vec3 ray){
+ vec3 origin=uCamera-vec3(uChamber.x,0,0);vec2 interval=vec2(0.,100.);
+ float a=dot(ray.xz,ray.xz),b=dot(origin.xz,ray.xz),c=dot(origin.xz,origin.xz)-uChamber.z*uChamber.z;
+ if(a>.000001){float disc=b*b-a*c;if(disc<=0.)return vec4(0);float d=sqrt(disc);interval=vec2(max(0.,(-b-d)/a),(-b+d)/a);}else if(c>0.)return vec4(0);
+ if(!clipPlane(vec3(0,-1,0),-uChamber.y,origin,ray,interval))return vec4(0);
+ if(!clipPlane(vec3(0,1,uChamberSlope),uChamber.w,origin,ray,interval))return vec4(0);
+ if(!clipPlane(vec3(0,1,-uChamberSlope),uChamber.w,origin,ray,interval))return vec4(0);
+ vec2 uv=gl_FragCoord.xy/uViewport;float depth=texture(uOpaqueDepth,uv).r;
+ if(depth<.999999){vec4 opaque=uInverseVP*vec4(uv*2.-1.,depth*2.-1.,1.);interval.y=min(interval.y,length(opaque.xyz/opaque.w-uCamera));}
+ if(interval.y<=interval.x)return vec4(0);
+ int steps=uQuality==0?24:uQuality==1?40:56;float stepSize=(interval.y-interval.x)/float(steps);
+ float jitter=hash(vec3(gl_FragCoord.xy,17));vec3 sum=vec3(0);float alpha=0.;
+ for(int i=0;i<56;i++){
+  if(i>=steps||alpha>.985)break;
+  vec3 q=origin+ray*(interval.x+(float(i)+jitter)*stepSize);
+  // Stretch burned gas with the moving piston; the initial kernel starts at the electrode gap.
+  vec3 fuel=vec3(q.x,(uChamber.w-q.y)*uBurnShape.x-uBurnShape.y,q.z);
+  vec3 drift=vec3(uBurnShape.z*.45,-uBurnShape.z*.8,uBurnShape.z*.25);
+  float eddies=.65*noise(fuel*18.+drift)+.35*noise(fuel*43.-drift*1.7);
+  float wrinkle=(eddies-.5)*.09*min(1.,uBurn.x/.16);
+  float distanceToFront=length(fuel)+wrinkle-uBurn.x;
+  float width=max(.012+.018*uBurn.w,stepSize*.55);
+  float burned=(1.-smoothstep(-width,width,distanceToFront))*step(.000001,uBurn.w);
+  float wallDistance=min(uChamber.z-length(q.xz),min(q.y-uChamber.y,uChamber.w-abs(q.z)*uChamberSlope-q.y));
+  float quench=smoothstep(0.,.007,wallDistance);
+  float front=exp(-pow(distanceToFront/width,2.))*uBurn.y*step(.000001,uBurn.w)*quench;
+  float hot=burned*uBurn.z*uBurnShape.w*(.40+.8*eddies);
+  float density=front*24.+hot*3.4+uFlow.x;
+  vec3 radiance=(front*24.*vec3(5.,1.85,.32)+hot*3.4*vec3(1.8,.20,.022)+uFlow.x*uColor*.4)/max(.00001,density);
+  float opacity=1.-exp(-density*stepSize);
+  sum+=(1.-alpha)*opacity*radiance;alpha+=(1.-alpha)*opacity;
+ }
+ return vec4(pow(aces(sum/max(alpha,.00001)),vec3(1./2.2)),alpha);
+}
 void main(){vec3 n=normalize(vNormal);if(!gl_FrontFacing)n=-n;vec3 view=normalize(uCamera-vWorld);float rough=clamp(uRough,.08,.95),metal=uMetal;vec3 base=pow(uColor,vec3(2.2));float alpha=uAlpha;
+if(uKind>9.5&&uKind<10.5){if(dot(normalize(vNormal),view)<0.)discard;vec4 volume=chamberVolume(-view);if(volume.a<.001)discard;outColor=volume;outNormal=vec4(normalize(mat3(uView)*n)*.5+.5,1);return;}
 if(uChamber.z>0.0){vec2 radial=vec2(vWorld.x-uChamber.x,vWorld.z);if(length(radial)>uChamber.z||vWorld.y<uChamber.y||vWorld.y>uChamber.w-abs(vWorld.z)*uChamberSlope)discard;}
 if(uUseMap>.5){vec4 tex=texture(uMap,vUV);base*=pow(tex.rgb,vec3(2.2));alpha*=tex.a;if(alpha<.02)discard;}
 if(uKind>5.5&&uKind<6.5){alpha*=pow(abs(dot(n,view)),.9);vec3 radiance=uColor*(.55+.45*clamp(uEmission/8.,0.,1.));outColor=vec4(radiance,alpha);outNormal=vec4(normalize(mat3(uView)*n)*.5+.5,1);return;}
@@ -52,6 +95,7 @@ float sh=shadow(n);vec3 color=lightBRDF(n,view,normalize(vec3(-3.,6.,5.)),vec3(2
 color+=lightBRDF(n,view,normalize(vec3(4.,3.,-4.)),vec3(1.55,1.9,2.3),base,rough,metal);
 color+=lightBRDF(n,view,normalize(vec3(-3.,1.,-2.)),vec3(.55,.66,.75),base,rough,metal);
 for(int i=0;i<4;i++){vec3 delta=uIgnitionLights[i].xyz-vWorld;float d=length(delta);float irradiance=uIgnitionLights[i].w*.003*(1.-smoothstep(.02,.16,d))/max(d*d,.0003);color+=lightBRDF(n,view,delta/max(d,.0001),vec3(1.,.065,.008)*irradiance,base,rough,metal);}
+for(int i=0;i<4;i++){vec4 light=uCombustionLights[i];float radial=length(vec2(vWorld.x-light.x,vWorld.z));float inside=(1.-smoothstep(uCombustionBounds.x,uCombustionBounds.x+.06,radial))*step(light.z-.025,vWorld.y)*step(vWorld.y,uCombustionBounds.y-abs(vWorld.z)*uChamberSlope+.035);vec3 delta=vec3(light.xy,0)-vWorld;float d=length(delta);float irradiance=light.w*inside*.9/max(d*d,.05);color+=lightBRDF(n,view,delta/max(d,.0001),vec3(1.,.20,.025)*irradiance,base,rough,metal);}
 vec3 r=reflect(-view,n);vec3 f0=mix(vec3(.04),base,metal);vec3 fr=fresnel(max(dot(n,view),0.),f0);
 color+=environment(r,rough)*fr*(.80-.2*rough)*uAO;
 color+=environment(n,.93)*base*(1.-metal)*.36*uAO;
@@ -141,7 +185,18 @@ float grain=fract(sin(dot(gl_FragCoord.xy,vec2(12.9,78.2)))*43758.54)-.5;c.rgb+=
             gl.drawBuffers([gl.COLOR_ATTACHMENT0, gl.COLOR_ATTACHMENT1]);
             if (gl.checkFramebufferStatus(gl.FRAMEBUFFER) !== gl.FRAMEBUFFER_COMPLETE)
                 throw new Error('MSAA framebuffer unavailable.');
-        } gl.bindFramebuffer(gl.FRAMEBUFFER, null); }
+        }
+        if (this.opaqueDepth) { gl.deleteTexture(this.opaqueDepth); gl.deleteFramebuffer(this.opaqueFBO); }
+        this.opaqueDepth = gl.createTexture(); this.opaqueFBO = gl.createFramebuffer();
+        gl.bindTexture(gl.TEXTURE_2D, this.opaqueDepth);
+        gl.texImage2D(gl.TEXTURE_2D, 0, gl.DEPTH_COMPONENT24, w, h, 0, gl.DEPTH_COMPONENT, gl.UNSIGNED_INT, null);
+        for (const p of [gl.TEXTURE_MIN_FILTER, gl.TEXTURE_MAG_FILTER]) gl.texParameteri(gl.TEXTURE_2D, p, gl.NEAREST);
+        for (const p of [gl.TEXTURE_WRAP_S, gl.TEXTURE_WRAP_T]) gl.texParameteri(gl.TEXTURE_2D, p, gl.CLAMP_TO_EDGE);
+        gl.bindFramebuffer(gl.FRAMEBUFFER, this.opaqueFBO);
+        gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.DEPTH_ATTACHMENT, gl.TEXTURE_2D, this.opaqueDepth, 0);
+        gl.drawBuffers([gl.NONE]); gl.readBuffer(gl.NONE);
+        if (gl.checkFramebufferStatus(gl.FRAMEBUFFER) !== gl.FRAMEBUFFER_COMPLETE) throw new Error('Chamber depth framebuffer unavailable.');
+        gl.bindFramebuffer(gl.FRAMEBUFFER, null); }
         upload(g) { if (this.geometry.has(g.id))
             return this.geometry.get(g.id); const gl = this.gl, vao = gl.createVertexArray(); gl.bindVertexArray(vao); const buffers = []; [g.positions, g.normals, g.uvs].forEach((arr, i) => { const b = gl.createBuffer(); buffers.push(b); gl.bindBuffer(gl.ARRAY_BUFFER, b); gl.bufferData(gl.ARRAY_BUFFER, arr, gl.STATIC_DRAW); gl.enableVertexAttribArray(i); gl.vertexAttribPointer(i, i === 2 ? 2 : 3, gl.FLOAT, false, 0, 0); }); const indices = gl.createBuffer(); gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, indices); gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, g.indices, gl.STATIC_DRAW); const instances = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, instances); for (let i = 0; i < 4; i++) {
             gl.enableVertexAttribArray(3 + i);
@@ -206,14 +261,25 @@ float grain=fract(sin(dot(gl_FragCoord.xy,vec2(12.9,78.2)))*43758.54)-.5;c.rgb+=
             gl.uniform1f(u.uTime, time);
             gl.uniform1f(u.uChamberSlope, Math.tan(F.K.HEAD.tilt));
             gl.uniform4fv(u['uIgnitionLights[0]'], root.ignitionLights || new Float32Array(16));
+            gl.uniform4fv(u['uCombustionLights[0]'], root.combustionLights || new Float32Array(16));
+            gl.uniform2f(u.uCombustionBounds, F.K.HEAD.bore, F.K.ROOF_Y);
+            gl.uniformMatrix4fv(u.uInverseVP, false, M.invert(vp));
+            gl.uniform2f(u.uViewport, this.width, this.height);
+            gl.activeTexture(gl.TEXTURE2); gl.bindTexture(gl.TEXTURE_2D, this.opaqueDepth); gl.uniform1i(u.uOpaqueDepth, 2);
             gl.activeTexture(gl.TEXTURE0);
             gl.bindTexture(gl.TEXTURE_2D, this.shadowTex);
             gl.uniform1i(u.uShadow, 0);
             gl.uniform1i(u.uMap, 1);
-            const draw = b => { const m = b.m; gl.uniform3fv(u.uColor, m.color); gl.uniform1f(u.uMetal, m.metal); gl.uniform1f(u.uRough, m.rough); gl.uniform1f(u.uKind, m.kind); gl.uniform1f(u.uAlpha, m.alpha); gl.uniform1f(u.uAO, m.ao); gl.uniform1f(u.uEmission, m.emission); gl.uniform4fv(u.uChamber, m.chamber || [0,0,0,0]); gl.uniform3fv(u.uFlow, m.flow || [0,0,0]); gl.uniform4fv(u.uSprayOrigin, m.sprayOrigin || [0,0,0,0]); gl.uniform3fv(u.uSprayAxis, m.sprayAxis || [0,1,0]); gl.uniform1f(u.uUseMap, m.texture ? 1 : 0); gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D, m.texture || this.white); this.drawBatch(b); };
+            const draw = b => { const m = b.m; gl.uniform3fv(u.uColor, m.color); gl.uniform1f(u.uMetal, m.metal); gl.uniform1f(u.uRough, m.rough); gl.uniform1f(u.uKind, m.kind); gl.uniform1f(u.uAlpha, m.alpha); gl.uniform1f(u.uAO, m.ao); gl.uniform1f(u.uEmission, m.emission); gl.uniform4fv(u.uChamber, m.chamber || [0,0,0,0]); gl.uniform3fv(u.uFlow, m.flow || [0,0,0]); gl.uniform4fv(u.uBurn, m.burn || [0,0,0,0]); gl.uniform4fv(u.uBurnShape, m.burnShape || [1,0,0,1]); gl.uniform4fv(u.uSprayOrigin, m.sprayOrigin || [0,0,0,0]); gl.uniform3fv(u.uSprayAxis, m.sprayAxis || [0,1,0]); gl.uniform1f(u.uUseMap, m.texture ? 1 : 0); gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D, m.texture || this.white); this.drawBatch(b); };
             for (const b of this.active)
                 if (b.m.alpha >= .995)
                     draw(b);
+            // A separate depth snapshot avoids sampling an attached render target,
+            // and terminates the flame behind piston, valve and cylinder surfaces.
+            gl.bindFramebuffer(gl.READ_FRAMEBUFFER, this.msFBO || this.fbo);
+            gl.bindFramebuffer(gl.DRAW_FRAMEBUFFER, this.opaqueFBO);
+            gl.blitFramebuffer(0, 0, this.width, this.height, 0, 0, this.width, this.height, gl.DEPTH_BUFFER_BIT, gl.NEAREST);
+            gl.bindFramebuffer(gl.FRAMEBUFFER, this.msFBO || this.fbo);
             gl.enable(gl.BLEND);
             gl.blendFuncSeparate(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA, gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
             gl.depthMask(false);
@@ -270,7 +336,8 @@ float grain=fract(sin(dot(gl_FragCoord.xy,vec2(12.9,78.2)))*43758.54)-.5;c.rgb+=
             gl.deleteFramebuffer(this.msFBO);
             for (const rb of this.msBuffers)
                 gl.deleteRenderbuffer(rb);
-        } for (const p of [this.main, this.depth, this.post])
+        } gl.deleteTexture(this.opaqueDepth); gl.deleteFramebuffer(this.opaqueFBO);
+        for (const p of [this.main, this.depth, this.post])
             gl.deleteProgram(p.p); gl.deleteVertexArray(this.postVAO); }
     }
     F.Renderer = Renderer;

@@ -3,7 +3,9 @@
   "checks": [
     "Initial render, title and reduced-motion pause",
     "ignition: source position, visible pixels, correct cylinder and pause",
+    "combustion: source position, visible pixels, correct cylinder and pause",
     "injection: source position, visible pixels, correct cylinder and pause",
+    "Combustion spreads, expands and stays behind chamber boundaries and piston at all qualities",
     "Exterior, exploded and cutaway keep attached manifolds and reset observation controls",
     "Eight-part exploration, navigation and Escape",
     "All three rendering qualities including new shaders",

@@ -24,6 +24,8 @@
             this.manifoldSections = [];
             this.ignitionLights = new Float32Array(16);
             this.root.ignitionLights = this.ignitionLights;
+            this.combustionLights = new Float32Array(16);
+            this.root.combustionLights = this.combustionLights;
             this.links = [];
             this.cache = new Map();
             this.partCount = 0;
@@ -170,7 +172,8 @@
                 this.mesh(this.root, this.ring(.681, .663, .055, 64, PI, PI), m.brass, [x, 2.935, 0]);
                 for (const side of [-1, 1])
                     this.mesh(this.root, this.box(.043, 1.87, .022, .002), m.copper, [x + side * .644, 1.998, -.002]);
-                const gasMat = F.material(K.STAGES[0].rgb, 0, .6, 4, { alpha: .15, emission: .2 }), gas = this.mesh(this.root, this.cyl(.598, 1, 56, 0), gasMat, [x, 2, 0]);
+                // An enclosing proxy; the shader integrates only inside the actual chamber.
+                const gasMat = F.material(K.STAGES[0].rgb, 0, .6, 10, { alpha: .98 }), gas = this.mesh(this.root, this.box(1.2, 1, 1.2, 0), gasMat, [x, 2, 0]);
                 gas.castShadow = false;
                 this.gases.push(gas);
             });
@@ -546,17 +549,14 @@
                 rod.p[2] = s.crankZ;
                 rod.r[0] = s.rodAngle;
                 const ignition = K.ignitionAt(s.phase, rpm);
-                const gas = this.gases[i], top = s.y + K.HEAD.pistonCrown + .002, h = K.ROOF_Y - top;
+                const burn = K.combustionAt(s.phase, rpm);
+                const gas = this.gases[i], top = burn.floor, h = burn.height;
                 gas.p[1] = top + h / 2;
                 gas.s[1] = h;
                 gas.material.color = s.stage.rgb;
-                gas.material.alpha = s.stageIndex === 0 ? .08 + .10 * Math.exp(-s.progress * 4) : s.stageIndex === 2 ? .035 : .022;
-                gas.material.emission = s.stageIndex === 0 ? .55 * Math.exp(-s.progress * 4) : .02;
-                if (ignition.burning && s.stageIndex === 3) {
-                    gas.material.color = K.STAGES[0].rgb;
-                    gas.material.alpha = .025 * ignition.burn;
-                    gas.material.emission = .15 * ignition.burn;
-                }
+                gas.material.burn = [burn.radius, burn.front, burn.heat, burn.fraction];
+                gas.material.burnShape = [burn.referenceHeight / h, K.ROOF_Y - burn.originY, burn.time, burn.density];
+                gas.material.flow = [s.stageIndex === 2 ? .055 : .018, 0, 0];
                 gas.material.chamber = [this.xs[i], top, K.HEAD.bore - .001, K.ROOF_Y];
                 gas.visible = effects;
                 const spark = this.sparks[i];
@@ -570,6 +570,7 @@
                     filament.branches.forEach((branch, k) => { branch.visible = (strike + k * 2) % 5 !== 0; });
                 });
                 this.ignitionLights.set([this.xs[i], K.HEAD.sparkY - K.HEAD.sparkGap / 2, 0, effects ? ignition.intensity : 0], i * 4);
+                this.combustionLights.set([this.xs[i], top + h * .55, top, effects ? burn.light : 0], i * 4);
             }
             for (const v of this.valves) {
                 const s = K.cylinderAt(this.angle, v.i), lift = s[v.kind];
