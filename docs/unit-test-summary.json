@@ -1,10 +1,10 @@
 {
-  "command": "npm test",
-  "node": "v22.16.0",
-  "tests": 37,
-  "pass": 37,
-  "fail": 0,
+  "pass": 45,
   "cancelled": 0,
   "skipped": 0,
+  "node": "v24.19.0",
+  "tests": 45,
+  "command": "node --test tests/kinematics.test.cjs tests/geometry.test.cjs tests/server.test.cjs tests/site.test.cjs",
+  "fail": 0,
   "todo": 0
 }

@@ -58,6 +58,11 @@
 
     <section class="viewport" id="viewport" aria-label="インタラクティブな3Dエンジン">
       <canvas id="engine-canvas" tabindex="0" aria-label="3Dエンジン。ドラッグで回転、ホイールまたはピンチでズーム。矢印キーで回転。"></canvas>
+      <div class="inspection-views" role="group" aria-label="観察位置">
+        <button data-inspection="overview" aria-pressed="true">全体</button>
+        <button data-inspection="ignition" aria-pressed="false">点火</button>
+        <button data-inspection="injection" aria-pressed="false">燃料噴射</button>
+      </div>
       <div class="loading" id="loading"><span class="loading-mark"></span><p class="mono">ASSEMBLING PRECISION</p><small>光と機構を組み立てています</small></div>
       <div class="hotspots" id="hotspots" hidden></div>
     </section>
@@ -81,7 +86,7 @@
       <p class="part-description" id="part-description"></p>
       <div class="part-fact" id="part-fact"></div>
       </div>
-      <div class="part-nav"><button id="part-prev" aria-label="前の部品">←</button><span class="mono" id="part-page">01 / 05</span><button id="part-next" aria-label="次の部品">→</button></div>
+      <div class="part-nav"><button id="part-prev" aria-label="前の部品">←</button><span class="mono" id="part-page">01 / 08</span><button id="part-next" aria-label="次の部品">→</button></div>
     </aside>
 
     <div class="view-tools"><button class="icon-button" id="orbit" title="自動回転" aria-label="自動回転" aria-pressed="false"><svg><use href="#i-orbit"/></svg></button><button class="icon-button" id="reset" title="視点をリセット" aria-label="視点をリセット"><svg><use href="#i-reset"/></svg></button><span class="mono">VIEW</span></div>
@@ -96,7 +101,7 @@
           <button data-mode="exploded" aria-pressed="false"><svg><use href="#i-layers"/></svg><span>分解</span><small class="mono">03</small></button>
         </div>
         <span class="console-tag mono">REAL-TIME 3D<span>/</span>PRECISION IN MOTION</span>
-        <button class="toggle" id="combustion" aria-pressed="true"><span class="switch"></span>燃焼を可視化</button>
+        <button class="toggle" id="combustion" aria-pressed="true"><span class="switch"></span>燃焼・噴射</button>
       </div>
       <div class="console-controls">
         <button class="play-button" id="play" aria-label="一時停止" aria-pressed="true"><svg><use href="#i-pause"/></svg></button>
@@ -114,7 +119,8 @@
     <h2 id="about-title">The beauty of<br><em>engineering.</em></h2>
     <p>機械を、ゆっくり眺めるための場所。</p><p>4本のピストン、16本のバルブ、2本のカムシャフト。ひとつのクランク角に結びついた機構を、自由な視点から観察してください。</p>
     <dl><div><dt>視点</dt><dd>ドラッグで回転。ホイール／ピンチでズーム。右ドラッグ／2本指の移動で平行移動。</dd></div><div><dt>時間</dt><dd>Space：再生／停止。角度スライダー：一時停止して任意の位置へ。</dd></div><div><dt>表示</dt><dd>1：外観　2：断面　3：分解　R：視点リセット　E：構造を探索</dd></div><div><dt>品質</dt><dd>右上の星で標準・高品質・軽量を切り替え。音はスピーカーを押したときだけ再生します。</dd></div></dl>
-    <p class="note">この作品は架空の2.0 L直列4気筒エンジンを題材にした、鑑賞用の手続き型3Dモデルです。ピストンはスライダークランク式で連動し、カムシャフトはクランクの半速で回転します。バルブタイミング、カム形状、燃焼色、分解位置、音は観察用に理想化しています。特定製品のCADや、熱・流体・応力を解く工学シミュレーションではありません。</p>
+    <p class="note">86 × 86 mmの直列4気筒・DOHC・16バルブ。吸排気バルブの挟み角は28°、ポート噴射は各気筒の吸気バルブへ、放電はプラグ先端の0.9 mmの電極間へ。点火・噴射・カム・ピストンは同じクランク角に同期します。「点火」「燃料噴射」で観察位置へ移り、再生すると機構の動きを追えます。</p>
+    <p class="note">寸法と機構の整合性を検証した独自設計です。噴霧・燃焼・反射光は可視化であり、特定車種の実測データや熱・流体・応力の解析結果を表示するものではありません。</p>
     <span class="dialog-foot mono">NO EXTERNAL ASSETS. JUST GEOMETRY, LIGHT & MOTION.</span>
   </dialog>
   <noscript><div class="error-message">この作品を動かすにはJavaScriptを有効にしてください。</div></noscript>

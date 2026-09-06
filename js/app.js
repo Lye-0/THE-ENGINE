@@ -5,18 +5,28 @@
     const PARTS = [
         { name: 'ピストン', en: 'PISTON ASSEMBLY', kicker: 'THE RECIPROCATING ASSEMBLY', body: '燃焼室の圧力を受け止め、上下の動きへ。細いリングがシリンダーとの隙間を密閉し、コンロッドがその力をクランクへ伝えます。', fact: '4 PISTONS / 86 mm BORE<br>1・4番、2・3番がそれぞれ同じ高さで動きます。' },
         { name: 'クランクシャフト', en: 'CRANKSHAFT', kicker: 'THE ROTATING ASSEMBLY', body: 'ピストンの往復運動を、回転へと変える中心軸。偏心したクランクピンと、反対側のカウンターウェイトが、力の流れを形にしています。', fact: '86 mm STROKE / 43 mm THROW<br>コンロッドの両端は、ピストンピンとクランクピンに連動します。' },
-        { name: 'バルブ & スプリング', en: 'VALVETRAIN', kicker: 'THE BREATHING MECHANISM', body: '吸気と排気、それぞれに2本のバルブ。カムがバルブを押し下げるとスプリングが縮み、カムが通過すると閉じる位置へ戻ります。', fact: '4 VALVES × 4 CYLINDERS<br>奥側が吸気、手前側が排気。この展示では開閉時期を理想化しています。' },
+        { name: 'バルブ & スプリング', en: 'VALVETRAIN', kicker: 'THE BREATHING MECHANISM', body: '左右14°ずつ傾いた吸排気バルブ。カムに押されるバケット、ステム、スプリングが同じ軸で動き、バルブが燃焼室側へ開きます。', fact: '28° INCLUDED ANGLE / 16 VALVES<br>吸気と排気の切り替わりには、両方が開くオーバーラップがあります。' },
         { name: 'カムシャフト', en: 'DUAL OVERHEAD CAMSHAFT', kicker: 'THE MASTER OF TIMING', body: '2本のシャフトに並ぶ、卵形のカム。形状と位相の違いが16本のバルブを順番に動かし、エンジンが呼吸するタイミングを決めます。', fact: 'CRANK : CAM = 2 : 1<br>クランクが2回転する間に、カムが1回転します。' },
-        { name: 'タイミングチェーン', en: 'TIMING DRIVE', kicker: 'EVERYTHING, IN SYNC', body: 'クランクと2本のカムをつなぐ、連続した金属のリンク。大小のスプロケットが回転比をつくり、ピストンとバルブの動きを同じ時間軸に保ちます。', fact: '20 / 40 TEETH · CHAIN DRIVE<br>分解表示では軸間が離れるため、チェーンを非表示にしています。' }
+        { name: 'タイミングチェーン', en: 'TIMING DRIVE', kicker: 'EVERYTHING, IN SYNC', body: 'クランクと2本のカムをつなぐ、連続した金属のリンク。大小のスプロケットが回転比をつくり、ピストンとバルブの動きを同じ時間軸に保ちます。', fact: '20 / 40 TEETH · CHAIN DRIVE<br>分解表示では軸間が離れるため、チェーンを非表示にしています。' },
+        { name: 'スパークプラグ', en: 'SPARK IGNITION', kicker: 'THE MOMENT OF IGNITION', body: '中心電極と接地電極の間をつなぐ、青白い放電。圧縮上死点の手前で点火し、電極間に生まれた火炎核が燃焼室へ広がります。', fact: '0.9 mm GAP / 1.2 ms DISCHARGE<br>回転数に合わせて点火時期が進みます。再生で点火の瞬間を観察できます。', inspection: 'ignition' },
+        { name: 'インテーク & インジェクター', en: 'PORT FUEL INJECTION', kicker: 'AIR MEETS FUEL', body: 'スロットルからプレナム、4本のランナーへ。燃料レールにつながるインジェクターが2方向に霧化し、開いた吸気バルブへ混合気を送ります。', fact: 'SEQUENTIAL MULTIPOINT INJECTION<br>1気筒に1本。噴射パルスと噴霧の移動は回転数・クランク角に同期します。', inspection: 'injection' },
+        { name: 'エキゾーストマニホールド', en: '4–2–1 EXHAUST HEADER', kicker: 'THE PATH OF EXHAUST', body: '排気バルブを出たガスが、4本の独立管から2本、そして1本の集合管へ。曲がりを持つ中空の管、接合部、出口フランジと酸素センサーを備えます。', fact: '1 + 4 / 2 + 3 CYLINDER PAIRING<br>各ペアの排気パルスは360°間隔で集合部へ向かいます。' }
     ];
     class CameraController {
-        constructor(canvas) { this.canvas = canvas; this.yaw = -.65; this.pitch = .34; this.radius = 13.7; this.radiusGoal = 13.7; this.target = [0, 1.0, 0]; this.targetGoal = this.target.slice(); this.auto = false; this.pointers = new Map(); this.mode = 'cutaway'; this.zoom = 1; this.reduced = matchMedia('(prefers-reduced-motion: reduce)').matches; this.bind(); }
+        constructor(canvas) { this.canvas = canvas; this.yaw = -.65; this.pitch = .34; this.radius = 13.7; this.radiusGoal = 13.7; this.target = [0, 1.0, 0]; this.targetGoal = this.target.slice(); this.auto = false; this.pointers = new Map(); this.mode = 'cutaway'; this.inspection = 'overview'; this.zoom = 1; this.reduced = matchMedia('(prefers-reduced-motion: reduce)').matches; this.bind(); }
         baseRadius() { const a = this.canvas.clientWidth / Math.max(1, this.canvas.clientHeight); return Math.max(13.7, 13.0 / a); }
-        frame(mode, reset = false) { this.mode = mode; const ex = mode === 'exploded'; this.zoom = 1; this.radiusGoal = this.baseRadius() * (ex ? 1.40 : 1); this.targetGoal = ex ? [0, 2.43, .03] : [0, 1.0, 0]; if (reset) {
+        frame(mode, reset = false) { this.mode = mode; this.inspection = 'overview'; const ex = mode === 'exploded'; this.zoom = 1; this.radiusGoal = this.baseRadius() * (ex ? 1.40 : 1); this.targetGoal = ex ? [0, 2.43, .03] : [0, 1.0, 0]; if (reset) {
             this.yaw = -.65;
             this.pitch = .34;
             this.auto = false;
         } }
+        focus(kind) {
+            this.inspection = kind; this.auto = false;
+            const ignition = kind === 'ignition', aspect = this.canvas.clientWidth / Math.max(1, this.canvas.clientHeight);
+            this.targetGoal = ignition ? [-2.175, 3.012, 0] : [-.725, 3.24, -.85];
+            this.yaw = ignition ? 0 : Math.PI + .72; this.pitch = ignition ? -.18 : .91;
+            this.radiusGoal = (ignition ? 1.55 : 2.7) * Math.max(1, .70 / aspect);
+        }
         bind() { const c = this.canvas; c.addEventListener('contextmenu', e => e.preventDefault()); c.addEventListener('pointerdown', e => { c.setPointerCapture(e.pointerId); this.pointers.set(e.pointerId, { x: e.clientX, y: e.clientY, button: e.button }); this.auto = false; document.dispatchEvent(new Event('ferro:orbit-stopped')); }); c.addEventListener('pointermove', e => { const old = this.pointers.get(e.pointerId); if (!old)
             return; const before = [...this.pointers.values()].map(p => ({ ...p })); this.pointers.set(e.pointerId, { ...old, x: e.clientX, y: e.clientY }); if (this.pointers.size === 1) {
             if (old.button === 2 || e.shiftKey)
@@ -37,7 +47,7 @@
             this.pitch = F.clamp(this.pitch + keys[e.key][1], -1.18, 1.4);
         } }); }
         pan(dx, dy) { const scale = this.radiusGoal / Math.max(350, this.canvas.clientHeight) * .52; const right = [Math.cos(this.yaw), 0, -Math.sin(this.yaw)], up = [-Math.sin(this.yaw) * Math.sin(this.pitch), Math.cos(this.pitch), -Math.cos(this.yaw) * Math.sin(this.pitch)]; this.targetGoal = V.add(this.targetGoal, V.add(V.mul(right, -dx * scale), V.mul(up, dy * scale))); this.targetGoal = this.targetGoal.map((v, i) => F.clamp(v, i === 1 ? -2 : -4, i === 1 ? 7 : 4)); }
-        changeZoom(factor) { this.radiusGoal = F.clamp(this.radiusGoal * factor, 4.5, 29); }
+        changeZoom(factor) { this.radiusGoal = F.clamp(this.radiusGoal * factor, this.inspection === 'overview' ? 4.5 : .45, 29); }
         update(dt) { const smooth = this.reduced ? 1 : 1 - Math.exp(-dt * 9); this.radius = F.mix(this.radius, this.radiusGoal, smooth); this.target = V.lerp(this.target, this.targetGoal, smooth); if (this.auto)
             this.yaw += dt * .12; const cp = Math.cos(this.pitch); return { eye: [this.target[0] + Math.sin(this.yaw) * cp * this.radius, this.target[1] + Math.sin(this.pitch) * this.radius, this.target[2] + Math.cos(this.yaw) * cp * this.radius], target: this.target, fov: 35 * Math.PI / 180 }; }
     }
@@ -70,16 +80,30 @@
                 const on = b.dataset.mode === mode;
                 b.classList.toggle('active', on);
                 b.setAttribute('aria-pressed', String(on));
-            } const data = { exterior: ['01', 'EXTERIOR VIEW'], cutaway: ['02', 'CUTAWAY VIEW'], exploded: ['03', 'EXPLODED VIEW'] }[mode]; $('#mode-number').textContent = data[0]; $('#mode-name').textContent = data[1]; camera.frame(mode); if (mode === 'exterior' && state.exploring)
+            } const data = { exterior: ['01', 'EXTERIOR VIEW'], cutaway: ['02', 'CUTAWAY VIEW'], exploded: ['03', 'EXPLODED VIEW'] }[mode]; $('#mode-number').textContent = data[0]; $('#mode-name').textContent = data[1]; camera.frame(mode, camera.inspection !== 'overview'); $('#observatory').classList.remove('is-inspecting'); $$('[data-inspection]').forEach(button => button.setAttribute('aria-pressed', String(button.dataset.inspection === 'overview'))); if (mode === 'exterior' && state.exploring)
                 toggleExplore(false); if (mode === 'exploded')
                 toast('部品を離して、組み立ての関係を観察します'); }
-            function setAngle(degrees) { setRunning(false); state.angle = K.wrap(F.clamp(Number(degrees) || 0, 0, 720) * Math.PI / 180); engine.update(state.angle, .016, state.combustion); updateUI(true); }
+            function setAngle(degrees) { setRunning(false); state.angle = K.wrap(F.clamp(Number(degrees) || 0, 0, 720) * Math.PI / 180); engine.update(state.angle, .016, state.combustion, state.rpm); updateUI(true); }
             function setRPM(n) { state.rpm = F.clamp(Number(n) || 800, 800, 6000); $('#rpm').value = String(state.rpm); $('#rpm-value').innerHTML = formatRPM(state.rpm) + ' <small>rpm</small>'; $('#rpm-readout').textContent = formatRPM(state.rpm); $('#rpm').style.setProperty('--fill', ((state.rpm - 800) / 5200 * 100) + '%'); audio.update(state.rpm, state.running && !hidden); }
             function setSpeed(n) { state.speed = Number(n); if (![.0125, .025, .1, 1].includes(state.speed))
                 state.speed = .025; $('#speed').value = String(state.speed); $('#slow-label').textContent = state.speed === 1 ? 'REAL TIME · 1× SPEED' : `SLOW MOTION · 1/${Math.round(1 / state.speed)} SPEED`; if (state.speed === 1)
                 toast('実時間：動きが速いため、構造の観察には1/40がおすすめです'); }
-            function selectPart(index) { state.part = K.wrap(index, PARTS.length); const p = PARTS[state.part]; $('#part-kicker').textContent = String(state.part + 1).padStart(2, '0') + ' / ' + p.kicker; $('#part-index').textContent = String(state.part + 1).padStart(2, '0'); $('#part-title').textContent = p.name; $('#part-en').textContent = p.en; $('#part-description').textContent = p.body; $('#part-fact').innerHTML = p.fact; $('#part-page').textContent = String(state.part + 1).padStart(2, '0') + ' / 05'; $$('.hotspot').forEach((b, i) => { b.classList.toggle('active', i === state.part); b.setAttribute('aria-pressed', String(i === state.part)); }); }
-            function toggleExplore(on = !state.exploring) { state.exploring = on; if (on && state.mode === 'exterior')
+            function selectPart(index) { state.part = K.wrap(index, PARTS.length); const p = PARTS[state.part]; $('#part-kicker').textContent = String(state.part + 1).padStart(2, '0') + ' / ' + p.kicker; $('#part-index').textContent = String(state.part + 1).padStart(2, '0'); $('#part-title').textContent = p.name; $('#part-en').textContent = p.en; $('#part-description').textContent = p.body; $('#part-fact').innerHTML = p.fact; $('#part-page').textContent = String(state.part + 1).padStart(2, '0') + ' / ' + String(PARTS.length).padStart(2, '0'); $$('.hotspot').forEach((b, i) => { b.classList.toggle('active', i === state.part); b.setAttribute('aria-pressed', String(i === state.part)); }); if (p.inspection) setInspection(p.inspection); }
+            function setInspection(kind) {
+                if (!['overview', 'ignition', 'injection'].includes(kind)) return;
+                if (kind === 'overview') camera.frame(state.mode, true);
+                else {
+                    if (state.mode !== 'cutaway') setMode('cutaway');
+                    state.combustion = true; $('#combustion').setAttribute('aria-pressed', 'true');
+                    const phase = kind === 'ignition' ? K.ignitionAt(0, state.rpm).start + state.rpm / 60 * K.TAU * .00008 : 380 * K.DEG + state.rpm / 60 * K.TAU * .0026;
+                    setAngle(K.wrap(phase + (kind === 'injection' ? K.FIRING_OFFSETS[1] : 0)) / K.DEG);
+                    camera.focus(kind);
+                }
+                $('#observatory').classList.toggle('is-inspecting', kind !== 'overview' && !state.exploring);
+                $$('[data-inspection]').forEach(button => button.setAttribute('aria-pressed', String(button.dataset.inspection === kind)));
+                $('#orbit').setAttribute('aria-pressed', 'false');
+            }
+            function toggleExplore(on = !state.exploring) { state.exploring = on; $('#observatory').classList.toggle('is-inspecting', !on && camera.inspection !== 'overview'); if (on && state.mode === 'exterior')
                 setMode('cutaway'); $('#observatory').classList.toggle('is-exploring', on); $('#part-panel').hidden = !on; $('#hotspots').hidden = !on; $('#explore').setAttribute('aria-expanded', String(on)); $('#intro').inert = on; $('#intro').hidden = on; if (on) {
                 selectPart(state.part);
                 updateHotspots();
@@ -95,8 +119,9 @@
                 b.style.top = screen[1] + 'px';
             } }); }
             function setQuality(n) { state.quality = n; renderer.setQuality(n); resize(false); const names = ['軽量', '標準', '高品質'], labels = ['LOW', 'STD', 'HIGH']; $('#quality-label').textContent = labels[n]; $('#quality').title = '描画品質：' + names[n]; $('#quality').setAttribute('aria-label', '描画品質：' + names[n] + '。押すと' + names[(n + 1) % 3] + 'に変更'); toast('描画品質：' + names[n]); }
-            function resize(reframe = true) { const rect = canvas.getBoundingClientRect(); renderer.resize(rect.width, rect.height); if (reframe)
-                camera.frame(state.mode); }
+            function resize(reframe = true) { const rect = canvas.getBoundingClientRect(); renderer.resize(rect.width, rect.height); if (reframe) {
+                if (camera.inspection === 'overview') camera.frame(state.mode); else camera.focus(camera.inspection);
+            } }
             const observer = new ResizeObserver(() => resize());
             observer.observe($('#viewport'));
             $('#play').addEventListener('click', () => setRunning(!state.running));
@@ -106,6 +131,7 @@
             for (const b of $$('[data-mode]'))
                 b.addEventListener('click', () => setMode(b.dataset.mode));
             $('#combustion').addEventListener('click', () => { state.combustion = !state.combustion; $('#combustion').setAttribute('aria-pressed', String(state.combustion)); });
+            $$('[data-inspection]').forEach(button => button.addEventListener('click', () => setInspection(button.dataset.inspection)));
             $('#explore').addEventListener('click', () => toggleExplore());
             $('#close-part').addEventListener('click', () => toggleExplore(false));
             $('#part-next').addEventListener('click', () => selectPart(state.part + 1));
@@ -113,7 +139,7 @@
             $('#quality').addEventListener('click', () => setQuality((state.quality + 1) % 3));
             $('#orbit').addEventListener('click', () => { camera.auto = !camera.auto; $('#orbit').setAttribute('aria-pressed', String(camera.auto)); });
             document.addEventListener('ferro:orbit-stopped', () => $('#orbit').setAttribute('aria-pressed', 'false'));
-            function resetView() { camera.frame(state.mode, true); $('#orbit').setAttribute('aria-pressed', 'false'); toast('視点をリセットしました'); }
+            function resetView() { setInspection('overview'); toast('視点をリセットしました'); }
             $('#reset').addEventListener('click', resetView);
             $('.brand').addEventListener('click', e => { e.preventDefault(); resetView(); });
             $('#sound').addEventListener('click', async () => { const button = $('#sound'); if (button.disabled)
@@ -186,10 +212,10 @@
                 if (!hidden) {
                     if (state.running)
                         state.angle = K.advance(state.angle, dt, state.rpm, state.speed);
-                    engine.update(state.angle, dt, state.combustion);
+                    engine.update(state.angle, dt, state.combustion, state.rpm);
                     const view = camera.update(Math.max(dt, .001)); // A paused exhibition does not redraw identical GPU frames. Camera and mode
                     // transitions still settle smoothly; interaction always invalidates the signature.
-                    const renderKey = [state.angle, state.combustion, state.quality, engine.explosion, renderer.width, renderer.height, ...view.eye, ...view.target].map(v => typeof v === 'number' ? v.toFixed(4) : String(v)).join('|') + state.mode;
+                    const renderKey = [state.angle, state.rpm, state.combustion, state.quality, engine.explosion, renderer.width, renderer.height, ...view.eye, ...view.target].map(v => typeof v === 'number' ? v.toFixed(4) : String(v)).join('|') + state.mode;
                     if (state.running || camera.auto || renderKey !== lastRenderKey) {
                         renderer.render(engine.root, view, state.angle);
                         state.frames++;

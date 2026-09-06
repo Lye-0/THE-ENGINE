@@ -16,8 +16,15 @@
             this.rods = [];
             this.valves = [];
             this.cams = [];
+            this.camLobes = [];
             this.gases = [];
             this.sparks = [];
+            this.plugs = [];
+            this.flames = [];
+            this.injectors = [];
+            this.manifoldSections = [];
+            this.ignitionLights = new Float32Array(16);
+            this.root.ignitionLights = this.ignitionLights;
             this.links = [];
             this.cache = new Map();
             this.partCount = 0;
@@ -42,6 +49,16 @@
         mesh(parent, g, m, p = [0, 0, 0], r = [0, 0, 0], s = [1, 1, 1]) { this.partCount++; return parent.add(new Node(g, m, p, r, s)); }
         bolt(parent, p, r = [0, 0, 0], scale = 1, material = this.m.polish) { const group = parent.group(p, r); group.s = [scale, scale, scale]; this.mesh(group, this.cyl(.068, .021, 24, .003), this.m.forged, [0, .01, 0]); this.mesh(group, this.cyl(.051, .056, 6, .005), material, [0, .045, 0]); this.mesh(group, this.cyl(.023, .002, 6, .001), this.m.recess, [0, .074, 0]); return group; }
         pipe(parent, points, radius = .12, material = this.m.header) { return this.mesh(parent, G.tube(G.curve(points, 36), radius, 14), material); }
+        manifoldPipe(parent, points, radius, material, section = true) {
+            const path = G.curve(points, 40), full = G.sweptPipe(path, radius, .022, 28);
+            const mesh = this.mesh(parent, full, material);
+            if (section) this.manifoldSections.push({ mesh, full, cut: G.sweptPipe(path, radius, .022, 24, 0, PI * 1.05, [0, .85, Math.sign(points[0][2]) * .53]) });
+            return mesh;
+        }
+        axisFrame(parent, origin, direction) {
+            const d = V.norm(direction);
+            return parent.group(origin, [Math.atan2(d[2], d[1]), 0, -Math.asin(d[0])]);
+        }
         label(parent, text, w, h, p, r, small = '') { const c = document.createElement('canvas'); c.width = 1024; c.height = 192; const ctx = c.getContext('2d'); ctx.clearRect(0, 0, c.width, c.height); ctx.fillStyle = '#b6c6cc'; ctx.font = '500 94px Arial'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(text, 512, 78); if (small) {
             ctx.font = '25px monospace';
             ctx.fillStyle = '#829da6';
@@ -59,7 +76,7 @@
                     this.bolt(root, [x, -.83, z], [], .82);
                     this.mesh(root, this.box(.34, .08, .77), m.forged, [x, -.91, z * .69]);
                 }
-            this.label(root, 'F E R R O', 1.13, .19, [-2.45, -1.368, 1.09], [-PI / 2, 0, 0], 'ENGINE OBSERVATORY / 001');
+            this.label(root, 'THE ENGINE', 1.35, .19, [-2.45, -1.368, 1.09], [-PI / 2, 0, 0], 'ENGINE OBSERVATORY / 001');
             const shadow = F.material('#0c1519', 0, .98, 5, { alpha: .40 });
             this.mesh(root, this.cyl(1, .002, 72, 0), shadow, [0, -1.665, 0], [0, 0, 0], [4.1, 1, 2.3]).castShadow = false;
             this.bedplate = root.group();
@@ -149,62 +166,87 @@
                 for (const zz of [-.205, .205])
                     this.bolt(rod, [0, -.245, zz], [PI, 0, 0], .63);
                 // Sectioned liners expose the piston travel; the missing half is intentional.
-                this.mesh(this.root, this.ring(.665, .619, 1.89, 64, PI, PI), m.bore, [x, 1.997, 0]);
-                this.mesh(this.root, this.ring(.685, .616, .043, 64, PI, PI), m.alloy, [x, 2.96, 0]);
+                this.mesh(this.root, this.ring(.665, K.HEAD.bore, 1.89, 64, PI, PI), m.bore, [x, 1.997, 0]);
+                this.mesh(this.root, this.ring(.685, K.HEAD.bore, .043, 64, PI, PI), m.alloy, [x, 2.96, 0]);
                 this.mesh(this.root, this.ring(.681, .663, .055, 64, PI, PI), m.brass, [x, 2.935, 0]);
                 for (const side of [-1, 1])
                     this.mesh(this.root, this.box(.043, 1.87, .022, .002), m.copper, [x + side * .644, 1.998, -.002]);
-                const gasMat = F.material(K.STAGES[0].rgb, 0, .6, 4, { alpha: .15, emission: .2 }), gas = this.mesh(this.root, this.cyl(.571, 1, 56, 0), gasMat, [x, 2, 0]);
+                const gasMat = F.material(K.STAGES[0].rgb, 0, .6, 4, { alpha: .15, emission: .2 }), gas = this.mesh(this.root, this.cyl(.598, 1, 56, 0), gasMat, [x, 2, 0]);
                 gas.castShadow = false;
                 this.gases.push(gas);
             });
         }
         makeValvetrain() {
-            const m = this.m;
+            const m = this.m, h = K.HEAD;
             this.valveFrame = this.root.group();
             this.camFrame = this.root.group();
-            for (const z of [-.47, .47]) {
-                const cam = this.camFrame.group([0, 4.02, z]);
+            for (const side of [-1, 1]) {
+                const z = side * K.CAM_Z, kind = side > 0 ? 'exhaust' : 'intake';
+                const cam = this.camFrame.group([0, K.CAM_Y, z]);
                 this.cams.push(cam);
                 this.mesh(cam, this.cyl(.116, 5.86, 56), m.polish, [0, 0, 0], [0, 0, -PI / 2]);
                 for (const x of [-2.85, -1.45, 0, 1.45, 2.85]) {
                     this.mesh(cam, this.cyl(.143, .19, 48), m.polish, [x, 0, 0], [0, 0, -PI / 2]);
                     const frame = this.camFrame;
-                    this.mesh(frame, this.box(.23, .14, .44, .025), m.alloy, [x, 4.19, z]);
-                    for (const side of [-1, 1]) {
-                        this.mesh(frame, this.box(.18, .39, .075, .012), m.alloy, [x, 3.96, z + side * .18]);
-                        this.bolt(frame, [x, 4.268, z + side * .15], [0, 0, 0], .65);
+                    this.mesh(frame, this.box(.23, .14, .44, .025), m.alloy, [x, K.CAM_Y + .17, z]);
+                    for (const edge of [-1, 1]) {
+                        this.mesh(frame, this.box(.18, .39, .075, .012), m.alloy, [x, K.CAM_Y - .06, z + edge * .18]);
+                        this.bolt(frame, [x, K.CAM_Y + .248, z + edge * .15], [0, 0, 0], .65);
                     }
                 }
-                this.xs.forEach((x, i) => { for (const dx of [-.2, .2])
-                    this.mesh(cam, G.cam(K.FIRING_OFFSETS[i], z > 0 ? 'exhaust' : 'intake'), m.steel, [x + dx, 0, 0], [0, -PI / 2, 0]); });
+                this.xs.forEach((x, i) => { for (const dx of [-h.valveX, h.valveX]) {
+                    const mesh = this.mesh(cam, this.cached('cam' + [i, kind], () => G.cam(K.FIRING_OFFSETS[i], kind, 384, side * h.tilt)), m.polish, [x + dx, 0, 0], [0, -PI / 2, 0]);
+                    this.camLobes.push({ mesh, i, kind, dx, side });
+                } });
             }
-            const springGeo = G.helix(.093, .49, 7, .0145);
+            const springGeo = G.helix(K.SPRING.radius, h.springHeight, K.SPRING.turns, K.SPRING.wireRadius);
             this.xs.forEach((x, i) => {
-                for (const z of [-.47, .47])
-                    for (const dx of [-.20, .20]) {
-                        const kind = z > 0 ? 'exhaust' : 'intake', vgroup = this.valveFrame.group([x + dx, 0, z]);
+                for (const side of [-1, 1])
+                    for (const dx of [-h.valveX, h.valveX]) {
+                        const kind = side > 0 ? 'exhaust' : 'intake', radius = side > 0 ? .185 : .208;
+                        const vgroup = this.valveFrame.group([x + dx, h.seatY, side * h.seatZ], [side * h.tilt, 0, 0]);
                         const moving = vgroup.group();
-                        this.mesh(moving, G.lathe([[0, 2.944], [.18, 2.944], [.194, 2.954], [.176, 2.977], [.041, 3.021], [.033, 3.11]], 40), m.polish);
-                        this.mesh(moving, this.cyl(.029, .68, 28, .003), m.brass, [0, 3.37, 0]);
-                        this.mesh(moving, this.cyl(.122, .16, 40, .009), m.forged, [0, 3.77, 0]);
-                        this.mesh(moving, this.cyl(.125, .017, 40, .003), m.polish, [0, 3.853, 0]);
-                        this.mesh(moving, this.cyl(.134, .036, 40, .005), m.steel, [0, 3.634, 0]);
-                        const spring = this.mesh(vgroup, springGeo, m.polish, [0, 3.13, 0]);
-                        this.mesh(vgroup, this.ring(.139, .045, .031, 40), m.forged, [0, 3.116, 0]);
-                        this.mesh(vgroup, this.ring(.211, .18, .019, 48), m.brass, [0, 2.982, 0]);
-                        this.valves.push({ moving, spring, i, kind });
+                        const head = this.mesh(moving, G.lathe([[0, -.014], [radius - .008, -.014], [radius, .004], [radius - .024, .028], [.048, .072], [.038, .105]], 64), m.polish);
+                        this.mesh(moving, this.cyl(.038, .70, 36, .003), m.steel, [0, .44, 0]);
+                        this.mesh(moving, this.ring(.20, .178, .11, 56), m.forged, [0, h.followerTop - .06, 0]);
+                        const follower = this.mesh(moving, this.cyl(.198, .010, 64, .001), m.polish, [0, h.followerTop - .005, 0]);
+                        this.mesh(moving, this.cyl(.158, .028, 48, .004), m.steel, [0, h.springBase + h.springHeight + .014, 0]);
+                        const springMaterial = this.cached('spring-material' + i + kind, () => F.material('#c1c6cb', 1, .19, 1, { spring: [K.SPRING.radius, h.springHeight, K.SPRING.turns, K.SPRING.wireRadius] }));
+                        const spring = this.mesh(vgroup, springGeo, springMaterial, [0, h.springBase, 0]);
+                        this.mesh(vgroup, this.ring(.16, .05, .032, 48), m.forged, [0, h.springBase - .016, 0]);
+                        this.mesh(vgroup, this.ring(.057, .04, .20, 40), m.brass, [0, .20, 0]);
+                        this.mesh(vgroup, G.lathe([[radius, .004], [radius + .023, .004], [radius + .023, .028], [radius - .024, .028], [radius, .004]], 64), m.steel);
+                        this.valves.push({ moving, spring, head, follower, frame: vgroup, i, kind, side, radius });
                     }
-                const plug = this.valveFrame.group([x, 0, 0]);
-                this.mesh(plug, this.cyl(.045, .15, 24, .001), m.brass, [0, 3.011, 0]);
-                this.mesh(plug, this.cyl(.091, .09, 6, .003), m.steel, [0, 3.129, 0]);
-                this.mesh(plug, this.cyl(.057, .28, 32, .006), F.material('#d1c8b6', .05, .3), [0, 3.32, 0]);
-                for (let h = 0; h < 5; h++)
-                    this.mesh(plug, this.torus(.055, .009, 24), m.alloy, [0, 3.255 + h * .033, 0]);
-                this.mesh(plug, this.cyl(.045, .075, 24, .005), m.polish, [0, 3.50, 0]);
-                const spark = this.mesh(plug, G.sphere(.034, 12, 8), F.material('#ffd2a0', 0, .3, 4, { alpha: .1, emission: 3 }), [0, 2.953, 0]);
-                spark.castShadow = false;
-                this.sparks.push(spark);
+                const plug = this.valveFrame.group([x, h.sparkY, 0]), ceramic = F.material('#e4e0d4', .02, .19);
+                this.plugs.push(plug);
+                this.mesh(plug, this.cyl(.091, .24, 56, .004), m.steel, [0, .156, 0]);
+                for (let j = 0; j < 12; j++) this.mesh(plug, this.torus(.092, .004, 48), m.polish, [0, .046 + j * .018, 0]);
+                this.mesh(plug, this.ring(.113, .085, .016, 48), m.steel, [0, .291, 0]);
+                this.mesh(plug, this.cyl(.12, .095, 6, .005), m.polish, [0, .35, 0]);
+                this.mesh(plug, this.cyl(.061, .32, 48, .008), ceramic, [0, .548, 0]);
+                for (let j = 0; j < 5; j++) this.mesh(plug, this.torus(.059, .009, 40), ceramic, [0, .51 + j * .035, 0]);
+                this.mesh(plug, this.cyl(.039, .072, 32, .004), m.polish, [0, .745, 0]);
+                this.mesh(plug, G.lathe([[0, .021], [.018, .021], [.029, .069], [.044, .085], [0, .085]], 48), ceramic);
+                this.mesh(plug, this.cyl(.0038, .021, 24, 0), m.polish, [0, .0105, 0]);
+                const ground = plug.group([0, 0, 0], [0, PI / 2, 0]);
+                this.mesh(ground, this.box(.032, .095, .017, .004), m.steel, [0, .028, .065]);
+                this.mesh(ground, this.box(.032, .012, .082, .004), m.polish, [0, -h.sparkGap - .006, .031]);
+                const spark = plug.group(), arcMat = F.material('#cde4ff', 0, .2, 6, { alpha: .98, emission: 10 });
+                const filaments = [];
+                for (let variant = 0; variant < 3; variant++) {
+                    const points = Array.from({ length: 10 }, (_, j) => {
+                        const t = j / 9, envelope = Math.sin(PI * t);
+                        return [.0016 * Math.sin(j * 2.7 + variant) * envelope, -h.sparkGap * t, .0012 * Math.cos(j * 3.1 + variant) * envelope];
+                    });
+                    const arc = this.mesh(spark, G.tube(points, .0011, 8), arcMat);
+                    arc.castShadow = false; filaments.push(arc);
+                }
+                const halo = this.mesh(spark, G.sphere(.055, 24, 16), F.material('#367bff', 0, .3, 6, { alpha: .4, emission: .9 }), [0, -h.sparkGap / 2, 0]);
+                halo.castShadow = false;
+                this.sparks.push({ group: spark, filaments, halo, material: arcMat });
+                const flame = this.mesh(this.root, this.cached('flame-sphere', () => G.sphere(1, 40, 24)), F.material('#ffd18a', 0, .4, 8, { alpha: .35, emission: 2.4 }), [x, h.sparkY - h.sparkGap / 2, 0]);
+                flame.castShadow = false; this.flames.push(flame);
             });
             // A rear section of the machined head remains to locate the visible valve seats.
             this.mesh(this.valveFrame, this.box(5.78, .14, .17, .015), m.alloy, [0, 3.02, -.76]);
@@ -218,7 +260,7 @@
             const m = this.m;
             this.timing = this.root.group();
             this.sprockets = [];
-            const defs = [{ y: 0, z: 0, r: .21, teeth: 20, rate: 1 }, { y: 4.02, z: -.47, r: .42, teeth: 40, rate: .5 }, { y: 4.02, z: .47, r: .42, teeth: 40, rate: .5 }];
+            const defs = [{ y: 0, z: 0, r: .21, teeth: 20, rate: 1 }, { y: K.CAM_Y, z: -K.CAM_Z, r: .42, teeth: 40, rate: .5 }, { y: K.CAM_Y, z: K.CAM_Z, r: .42, teeth: 40, rate: .5 }];
             for (const d of defs) {
                 const g = this.timing.group([-3.10, d.y, d.z]);
                 this.sprockets.push({ g, rate: d.rate });
@@ -333,52 +375,130 @@
         makeExterior() {
             const m = this.m;
             this.headShell = this.root.group();
-            this.mesh(this.headShell, this.box(5.90, .80, 1.60, .08), m.alloy, [0, 3.39, 0]);
-            this.mesh(this.headShell, this.box(5.96, .056, 1.69, .016), m.steel, [0, 3.814, 0]);
-            this.mesh(this.headShell, this.box(5.97, .025, 1.68, .01), m.recess, [0, 3.854, 0]);
+            this.mesh(this.headShell, this.box(5.90, .80, 1.90, .08), m.alloy, [0, 3.39, 0]);
+            this.mesh(this.headShell, this.box(5.96, .056, 2.08, .016), m.steel, [0, 3.814, 0]);
+            this.mesh(this.headShell, this.box(5.97, .025, 2.08, .01), m.recess, [0, 3.854, 0]);
             for (const side of [-1, 1]) {
                 for (const x of [-2.77, -1.45, 0, 1.45, 2.77])
-                    this.bolt(this.headShell, [x, 3.45, side * .814], [side * PI / 2, 0, 0], .75);
+                    this.bolt(this.headShell, [x, 3.45, side * .964], [side * PI / 2, 0, 0], .75);
                 for (const y of [3.2, 3.28, 3.71])
-                    this.mesh(this.headShell, this.box(5.52, .022, .025, .005), m.steel, [0, y, side * .812]);
+                    this.mesh(this.headShell, this.box(5.52, .022, .025, .005), m.steel, [0, y, side * .962]);
             }
             this.cover = this.root.group();
-            this.mesh(this.cover, this.box(5.83, .44, 1.61, .14), m.graphite, [0, 4.16, 0]);
-            this.mesh(this.cover, this.box(5.93, .07, 1.70, .03), m.polish, [0, 3.935, 0]);
-            this.mesh(this.cover, this.box(5.9, .04, 1.67, .02), m.black, [0, 3.988, 0]);
+            this.mesh(this.cover, this.box(5.83, .64, 2.13, .14), m.graphite, [0, 4.26, 0]);
+            this.mesh(this.cover, this.box(5.93, .07, 2.20, .03), m.polish, [0, 3.935, 0]);
+            this.mesh(this.cover, this.box(5.9, .04, 2.17, .02), m.black, [0, 3.988, 0]);
             for (let i = 0; i < 6; i++)
-                this.mesh(this.cover, this.box(5.34, .016, .028, .008), m.steel, [0, 4.383, -.18 - i * .075]);
-            this.label(this.cover, 'F E R R O', 2.64, .42, [.03, 4.389, .36], [-PI / 2, 0, 0], 'TWIN CAM  /  16 VALVE');
+                this.mesh(this.cover, this.box(5.34, .016, .028, .008), m.steel, [0, 4.583, -.18 - i * .075]);
+            this.label(this.cover, 'THE ENGINE', 2.64, .42, [.03, 4.589, .36], [-PI / 2, 0, 0], 'TWIN CAM  /  16 VALVE');
             for (const side of [-1, 1])
                 for (const x of [-2.70, -1.45, 0, 1.45, 2.70])
-                    this.bolt(this.cover, [x, 4.26, side * .7], [], .78);
+                    this.bolt(this.cover, [x, 4.43, side * .93], [], .78);
             for (const x of this.xs) {
-                this.mesh(this.cover, this.box(.29, .17, .26, .035), m.black, [x, 4.42, .13]);
-                this.mesh(this.cover, this.cyl(.064, .21, 24), m.rubber, [x, 4.365, .15]);
-                this.pipe(this.cover, [[x, 4.48, .17], [x + .1, 4.47, .5], [x + .17, 4.25, .85], [x + .19, 3.92, .98]], .027, m.rubber);
+                this.mesh(this.cover, this.box(.29, .17, .26, .035), m.black, [x, 4.62, .13]);
+                this.mesh(this.cover, this.cyl(.064, .78, 24), m.rubber, [x, 4.23, 0]);
+                this.pipe(this.cover, [[x, 4.68, .17], [x + .1, 4.67, .5], [x + .17, 4.45, 1.05], [x + .19, 4.02, 1.18]], .027, m.rubber);
             }
-            this.mesh(this.cover, this.cyl(.176, .13, 40, .018), m.black, [2.21, 4.459, -.4]);
-            this.mesh(this.cover, this.box(.19, .025, .045, .01), m.forged, [2.21, 4.535, -.4]);
+            this.mesh(this.cover, this.cyl(.176, .13, 40, .018), m.black, [2.21, 4.659, -.4]);
+            this.mesh(this.cover, this.box(.19, .025, .045, .01), m.forged, [2.21, 4.735, -.4]);
+            this.makeManifolds();
+        }
+        makeManifolds() {
+            const m = this.m, h = K.HEAD;
             this.headers = this.root.group();
-            for (const x of this.xs) {
-                this.mesh(this.headers, this.box(.63, .38, .085, .08), m.forged, [x, 2.785, .85]);
-                for (const dx of [-.245, .245])
-                    this.bolt(this.headers, [x + dx, 2.81, .902], [PI / 2, 0, 0], .65);
-                this.pipe(this.headers, [[x, 2.8, .9], [x, 2.7, 1.13], [x + .03, 2.32, 1.43], [x + .11, 1.88, 1.56], [x + .20, 1.43, 1.56]], .147, m.header);
-                for (const yy of [2.2, 1.72])
-                    this.mesh(this.headers, this.torus(.148, .008, 36), m.copper, [x + .075, yy, 1.53]);
-            }
-            this.mesh(this.headers, this.cyl(.235, 5.87, 64, .03), m.graphite, [0, 1.365, 1.57], [0, 0, -PI / 2]);
-            for (const x of [-2.83, 2.83]) {
-                this.mesh(this.headers, this.ring(.269, .222, .056, 56), m.polish, [x, 1.365, 1.57], [0, 0, -PI / 2]);
-                this.mesh(this.headers, this.cyl(.213, .008, 48, .005), m.recess, [x + Math.sign(x) * .1, 1.365, 1.57], [0, 0, -PI / 2]);
-            }
             this.intake = this.root.group();
-            for (const x of this.xs) {
-                this.pipe(this.intake, [[x, 2.88, -.8], [x, 2.83, -1.1], [x - .08, 2.58, -1.43], [x - .11, 2.30, -1.42]], .13, m.alloy);
+            this.ports = this.valveFrame.group();
+            this.primaryPaths = [];
+            // Individual runners enter the head above the deck and divide to
+            // the two valve bowls. Both banks stay attached in section view.
+            this.xs.forEach((x, i) => {
+                for (const side of [-1, 1]) {
+                    const parent = side > 0 ? this.headers : this.intake;
+                    const flange = this.axisFrame(parent, [x, 3.20, side * .98], [0, 0, side]);
+                    this.mesh(flange, this.ring(.257, .184, .055, 64), m.forged);
+                    for (const dx of [-.31, .31]) {
+                        this.mesh(flange, this.box(.13, .054, .22, .045), m.alloy, [dx, 0, 0]);
+                        this.bolt(flange, [dx, .029, 0], [], .68);
+                    }
+                    for (const dx of [-h.valveX, h.valveX]) {
+                        const points = [[x + dx, h.seatY + .019, side * (h.seatZ + .005)],
+                            [x + dx, h.seatY + .09, side * (h.seatZ + .025)],
+                            [x + dx * .8, 3.145, side * .57], [x + dx * .38, 3.19, side * .80], [x, 3.20, side * .98]];
+                        this.manifoldPipe(this.ports, points, side > 0 ? .147 : .165, m.alloy);
+                    }
+                }
+                const inlet = [[x, 2.78, -1.88], [x, 3.04, -1.85], [x, 3.24, -1.60], [x, 3.25, -1.27], [x, 3.20, -.98]];
+                this.manifoldPipe(this.intake, inlet, .205, m.alloy);
+                // A 4-2-1 header pairs cylinders 1/4 and 2/3: paired pulses are
+                // separated by 360 crank degrees with the 1-3-4-2 firing order.
+                const outer = i === 0 || i === 3, z = outer ? 2.54 : 1.66, sign = Math.sign(x);
+                const path = [[x, 3.20, .98], [x, 3.18, 1.24], [x, 2.88, z - .12],
+                    [x * .80, 2.34, z], [sign * .45, 1.77, z], [sign * .17, 1.53, z]];
+                this.primaryPaths.push(path);
+                this.manifoldPipe(this.headers, path, .177, m.header);
+                const weld = this.axisFrame(this.headers, path[1], V.sub(path[2], path[0]));
+                this.mesh(weld, this.torus(.178, .008, 48), m.copper);
+                this.makeInjector(x, i);
+            });
+            for (const z of [1.66, 2.54]) {
+                const p = [[0, 1.56, z], [0, 1.37, z], [0, 1.08, z], [0, .78, 2.10 + Math.sign(z - 2.10) * .28], [0, .58, 2.10 + Math.sign(z - 2.10) * .17]];
+                const sampled = G.curve(p, 48), radii = sampled.map((_, i) => .38 - .165 * Math.min(1, i / 19));
+                this.mesh(this.headers, G.sweptPipe(sampled, radii, .025, 40), m.header);
+                this.mesh(this.headers, this.torus(.24, .011, 48), m.copper, [0, 1.05, z]);
             }
-            this.mesh(this.intake, this.cyl(.32, 5.74, 64, .025), m.graphite, [0, 2.25, -1.45], [0, 0, -PI / 2]);
-            this.mesh(this.intake, this.ring(.33, .285, .10, 56), m.polish, [-2.9, 2.25, -1.45], [0, 0, -PI / 2]);
+            const collector = G.curve([[0, .63, 2.10], [0, .38, 2.10], [.25, .13, 2.10], [1.26, .10, 2.10]], 44);
+            this.mesh(this.headers, G.sweptPipe(collector, collector.map((_, i) => .43 - .14 * Math.min(1, i / 20)), .025, 40), m.header);
+            const outlet = this.axisFrame(this.headers, [1.28, .10, 2.10], [1, 0, 0]);
+            this.mesh(outlet, this.ring(.36, .264, .055, 64), m.forged);
+            for (const z of [-.31, .31]) this.bolt(outlet, [0, .03, z], [], .72);
+            const sensor = this.axisFrame(this.headers, [.58, .39, 2.10], [0, 1, 0]);
+            this.mesh(sensor, this.cyl(.067, .20, 6), m.polish);
+            this.mesh(sensor, this.cyl(.035, .19, 32), m.ceramic || m.alloy, [0, .15, 0]);
+            this.pipe(this.headers, [[.58, .61, 2.10], [.74, .80, 2.13], [.95, 1.02, 2.15]], .016, m.rubber);
+            // Closed plenum, machined throttle bore and a butterfly plate.
+            this.manifoldPipe(this.intake, [[-2.92, 2.63, -1.91], [2.88, 2.63, -1.91]], .37, m.graphite);
+            this.mesh(this.intake, this.cyl(.367, .038, 64), m.graphite, [2.90, 2.63, -1.91], [0, 0, -PI / 2]);
+            const throttle = this.axisFrame(this.intake, [-3.12, 2.63, -1.91], [1, 0, 0]);
+            this.mesh(throttle, this.ring(.39, .31, .40, 72), m.alloy);
+            this.mesh(throttle, this.ring(.425, .311, .048, 64), m.polish, [0, -.20, 0]);
+            this.mesh(throttle, this.cyl(.302, .012, 64, .001), m.brass, [0, 0, 0], [.87, 0, 0]);
+            this.mesh(throttle, this.cyl(.021, .70, 32), m.steel, [0, 0, 0], [0, 0, PI / 2]);
+            this.mesh(throttle, this.box(.23, .30, .24, .04), m.black, [.43, 0, 0]);
+            const railY = 3.34 + .55 * .5, railZ = -.85 - .55 * Math.sqrt(1 - .5 ** 2);
+            this.mesh(this.intake, this.cyl(.068, 5.65, 56), m.polish, [0, railY, railZ], [0, 0, -PI / 2]);
+            for (const x of [-2.55, 2.55]) {
+                this.mesh(this.intake, this.box(.13, .06, .35, .018), m.forged, [x, railY - .055, railZ + .10]);
+                this.bolt(this.intake, [x, railY - .024, railZ + .25], [], .65);
+            }
+            this.pipe(this.intake, [[2.8, railY, railZ], [3.04, railY, railZ], [3.08, 3.05, -1.65], [3.02, 2.8, -1.72]], .036, m.rubber);
+        }
+        makeInjector(x, i) {
+            const m = this.m, nozzle = [x, 3.34, -.85], direction = [0, .5, -Math.sqrt(1 - .5 ** 2)];
+            const body = this.axisFrame(this.intake, nozzle, direction);
+            this.mesh(body, this.ring(.078, .033, .085, 48), m.alloy, [0, .057, 0]);
+            this.mesh(body, this.cyl(.032, .14, 40), m.polish, [0, .07, 0]);
+            this.mesh(body, this.cyl(.066, .24, 48, .01), m.black, [0, .25, 0]);
+            this.mesh(body, this.torus(.057, .009, 36), F.material('#486d51', .05, .52), [0, .13, 0]);
+            this.mesh(body, this.cyl(.045, .18, 40), m.polish, [0, .445, 0]);
+            this.mesh(body, this.torus(.044, .009, 36), m.rubber, [0, .50, 0]);
+            this.mesh(body, this.box(.115, .10, .09, .01), m.black, [.075, .26, 0]);
+            for (const z of [-.019, .019]) this.mesh(body, this.box(.027, .023, .012, .002), m.brass, [.134, .26, z]);
+            this.pipe(this.intake, [[x + .13, 3.47, -1.075], [x + .22, 3.55, -1.25], [x + .26, 3.63, -1.38]], .014, m.rubber);
+            const jets = [], drops = [];
+            this.dropMaterial ||= F.material('#e3edf1', 0, .21, 0, { alpha: .65 });
+            const cone = this.cached('spray-cone', () => G.lathe([[0, 0], [.0015, 0], [.105, 1], [0, 1]], 40));
+            for (const side of [-1, 1]) {
+                const target = [x + side * K.HEAD.valveX, 3.025, -.275], delta = V.sub(target, nozzle), length = V.len(delta);
+                const jet = this.axisFrame(this.intake, nozzle, delta);
+                const sprayMaterial = F.material('#d4e5ee', 0, .35, 9, { alpha: .72, flow: [0, 0, 0], sprayOrigin: [...nozzle, length], sprayAxis: V.norm(delta) });
+                const mesh = this.mesh(jet, cone, sprayMaterial, [0, 0, 0], [], [length, length, length]);
+                mesh.castShadow = false; jets.push({ mesh, target, frame: jet, length });
+                for (let n = 0; n < 30; n++) {
+                    const drop = this.mesh(jet, this.cached('fuel-droplet', () => G.sphere(.00055, 8, 6)), this.dropMaterial);
+                    drop.castShadow = false; drops.push({ mesh: drop, n, length, side });
+                }
+            }
+            this.injectors.push({ i, body, nozzle, jets, drops });
         }
         makeGuides() { this.guides = this.root.group(); for (const x of [-2.83, -1.45, 1.45, 2.83])
             for (const z of [-.70, .70])
@@ -386,13 +506,15 @@
                     this.mesh(this.guides, this.cyl(.003, .075, 6, .001), this.m.guide, [x, y, z]).castShadow = false; }
         setMode(mode) { if (!['exterior', 'cutaway', 'exploded'].includes(mode))
             throw new Error('Unknown view mode.'); this.mode = mode; }
-        update(angle, dt, combustion) {
+        update(angle, dt, combustion, rpm = 1200) {
             this.angle = K.wrap(angle);
+            this.rpm = rpm;
             if (this.reducedMotion) this.explosion = this.mode === 'exploded' ? 1 : 0;
             this.explosion += ((this.mode === 'exploded' ? 1 : 0) - this.explosion) * (1 - Math.exp(-Math.max(dt, .001) * 5));
             if (Math.abs(this.explosion - (this.mode === 'exploded' ? 1 : 0)) < .001)
                 this.explosion = this.mode === 'exploded' ? 1 : 0;
             const ex = this.explosion;
+            const effects = !!combustion && this.mode === 'cutaway' && ex < .001;
             this.crank.r[0] = this.angle;
             for (let i = 0; i < 4; i++) {
                 const s = K.cylinderAt(this.angle, i);
@@ -401,20 +523,48 @@
                 rod.p[1] = s.crankY;
                 rod.p[2] = s.crankZ;
                 rod.r[0] = s.rodAngle;
-                const gas = this.gases[i], top = s.y + .334, h = Math.max(.025, 2.977 - top);
+                const ignition = K.ignitionAt(s.phase, rpm);
+                const gas = this.gases[i], top = s.y + K.HEAD.pistonCrown + .002, h = K.ROOF_Y - top;
                 gas.p[1] = top + h / 2;
                 gas.s[1] = h;
                 gas.material.color = s.stage.rgb;
-                gas.material.alpha = s.stageIndex === 0 ? .15 + .14 * Math.exp(-s.progress * 4) : s.stageIndex === 2 ? .075 : .035;
-                gas.material.emission = s.stageIndex === 0 ? .9 * Math.exp(-s.progress * 4) : .04;
-                gas.visible = !!combustion && this.mode === 'cutaway';
-                this.sparks[i].visible = !!combustion && s.phase < .35 && this.mode === 'cutaway';
-                this.sparks[i].material.alpha = Math.max(.1, 1 - s.phase / .35);
+                gas.material.alpha = s.stageIndex === 0 ? .08 + .10 * Math.exp(-s.progress * 4) : s.stageIndex === 2 ? .035 : .022;
+                gas.material.emission = s.stageIndex === 0 ? .55 * Math.exp(-s.progress * 4) : .02;
+                gas.material.chamber = [this.xs[i], top, K.HEAD.bore - .001, K.ROOF_Y];
+                gas.visible = effects;
+                const spark = this.sparks[i];
+                spark.group.visible = effects && ignition.active;
+                spark.material.emission = 6 + ignition.intensity * 10;
+                spark.halo.material.alpha = .68 * ignition.intensity;
+                spark.filaments.forEach((filament, j) => { filament.visible = j === Math.floor(ignition.seconds / .00008) % 3; });
+                this.ignitionLights.set([this.xs[i], K.HEAD.sparkY - K.HEAD.sparkGap / 2, 0, effects ? ignition.intensity : 0], i * 4);
+                const flame = this.flames[i], radius = .008 + .72 * ignition.burn ** .72;
+                flame.s = [radius, radius, radius];
+                flame.visible = effects && ignition.burning;
+                flame.material.chamber = gas.material.chamber;
+                flame.material.alpha = .43 * (1 - ignition.burn * .8);
+                flame.material.emission = 2.0 + (1 - ignition.burn) * 2;
+                flame.material.color = ignition.burn < .12 ? [.60, .78, 1] : [1, .68, .31];
             }
             for (const v of this.valves) {
                 const s = K.cylinderAt(this.angle, v.i), lift = s[v.kind];
                 v.moving.p[1] = -lift;
-                v.spring.s[1] = (.49 - lift) / .49;
+                v.spring.material.spring[1] = K.HEAD.springHeight - lift;
+            }
+            for (const injector of this.injectors) {
+                const phase = K.cylinderAt(this.angle, injector.i).phase, injection = K.injectionAt(phase, rpm);
+                injector.jets.forEach(jet => {
+                    jet.mesh.visible = effects && injection.visible;
+                    jet.mesh.material.flow = [injection.front, injection.tail, injection.age * 1400];
+                });
+                for (const drop of injector.drops) {
+                    const age = injection.age - drop.n / 30 * injection.duration, t = age / injection.flight;
+                    drop.mesh.visible = effects && t > 0 && t < 1;
+                    if (drop.mesh.visible) {
+                        const spread = .065 * t * Math.sqrt((drop.n + .5) / 30), a = drop.n * 2.39996 + drop.side;
+                        drop.mesh.p = [Math.cos(a) * spread, t * drop.length, Math.sin(a) * spread];
+                    }
+                }
             }
             for (const cam of this.cams)
                 cam.r[0] = K.camAngle(this.angle);
@@ -432,8 +582,9 @@
             this.sump.p[2] = ex * 2.13;
             this.timingCover.p[0] = -ex * 1.14;
             const exterior = this.mode !== 'cutaway';
-            for (const n of [this.cover, this.headShell, this.frontShell, this.backShell, this.sump, this.timingCover, this.headers, this.intake])
+            for (const n of [this.cover, this.headShell, this.frontShell, this.backShell, this.sump, this.timingCover])
                 n.visible = exterior;
+            for (const section of this.manifoldSections) section.mesh.geometry = exterior ? section.full : section.cut;
             this.backFrame.visible = this.mode === 'cutaway';
             this.guides.visible = ex > .08;
             this.guides.s[1] = .8 + ex * .2;
@@ -448,7 +599,7 @@
                 }
             }
         }
-        anchors() { return [[this.xs[0], this.pistons[0].p[1] + .30, .35], [.60, .0, .48], [this.xs[2], 3.5 + this.valveFrame.p[1], .47], [.02, 4.18 + this.camFrame.p[1], .47], [-3.16, 2.10, -.10]]; }
+        anchors() { return [[this.xs[0], this.pistons[0].p[1] + .30, .35], [.60, .0, .48], [this.xs[2], 3.5 + this.valveFrame.p[1], K.CAM_Z], [.02, 4.18 + this.camFrame.p[1], K.CAM_Z], [-3.16, 2.10, -.10], [this.xs[0], K.HEAD.sparkY + this.valveFrame.p[1], 0], [this.xs[1], 3.25 + this.intake.p[1], -1.05 + this.intake.p[2]], [.2, 1.7 + this.headers.p[1], 2.3 + this.headers.p[2]]]; }
     }
     F.Engine = Engine;
 })(globalThis.FERRO);

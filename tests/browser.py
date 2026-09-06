@@ -35,7 +35,7 @@ with sync_playwright() as p:
  angle=page.evaluate('ferro.state.angle');page.wait_for_timeout(120)
  check('Pause holds the crank angle',page.evaluate('ferro.state.angle')==angle)
  page.locator('#angle').evaluate("e=>{e.value='450';e.dispatchEvent(new Event('input',{bubbles:true}))}")
- check('Crank scrub drives actual piston and valve transforms',page.evaluate('Math.abs(ferro.state.angle-2.5*Math.PI)<1e-6 && Math.abs(ferro.engine.valves[0].moving.p[1]+.16)<1e-5'))
+ check('Crank scrub drives actual piston and valve transforms',page.evaluate('Math.abs(ferro.state.angle-2.5*Math.PI)<1e-6 && Math.abs(ferro.engine.valves[0].moving.p[1]+FERRO.K.valveLift(2.5*Math.PI,\"intake\"))<1e-5'))
  page.locator('#rpm').evaluate("e=>{e.value='3000';e.dispatchEvent(new Event('input',{bubbles:true}))}")
  check('RPM input updates state and both readouts',page.evaluate('ferro.state.rpm===3000 && document.querySelector("#rpm-readout").textContent==="3,000"'))
  page.select_option('#speed','0.1');check('Playback-speed select updates state',page.evaluate('ferro.state.speed===.1'))

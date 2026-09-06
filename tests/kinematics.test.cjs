@@ -40,15 +40,63 @@ test('power, exhaust, intake, compression occupy successive idealised strokes',(
   assert.equal(K.cylinderAt((i+.5)*Math.PI,0).stage.name,stage);
  });
 });
-test('idealised inlet and exhaust valves never open during compression or power',()=>{
+test('valves have lead, lag and overlap, with a sealed compression/ignition interval',()=>{
  for(let d=0;d<720;d++){
-  const s=K.cylinderAt(d*Math.PI/180,0);
-  assert.ok(s.intake>=0&&s.intake<=.16);assert.ok(s.exhaust>=0&&s.exhaust<=.16);
-  if(s.stageIndex===0||s.stageIndex===3){close(s.intake,0);close(s.exhaust,0);}
-  assert.ok(!(s.intake>0&&s.exhaust>0));
+  const s=K.cylinderAt(d*K.DEG,0);
+  assert.ok(s.intake>=0&&s.intake<=K.VALVE_EVENTS.intake.lift);
+  assert.ok(s.exhaust>=0&&s.exhaust<=K.VALVE_EVENTS.exhaust.lift);
+  if(d>621||d<107){close(s.intake,0);close(s.exhaust,0);}
  }
- close(K.valveLift(1.5*Math.PI,'exhaust'),.16);
- close(K.valveLift(2.5*Math.PI,'intake'),.16);
+ assert.ok(K.valveLift(360*K.DEG,'intake')>0&&K.valveLift(360*K.DEG,'exhaust')>0);
+ for(const [kind,event] of Object.entries(K.VALVE_EVENTS)) close(K.valveLift(event.open+event.duration/2,kind),event.lift);
+});
+test('cam lift ramps meet the seat with zero velocity and acceleration and stay convex',()=>{
+ for(const [kind,event] of Object.entries(K.VALVE_EVENTS)) {
+  for(const endpoint of [event.open,event.open+event.duration]){
+   for(const delta of [-1e-6,0,1e-6]){
+    const m=K.valveMotion(endpoint+delta,kind);
+    assert.ok(m.lift<1e-10&&Math.abs(m.velocity)<1e-8&&Math.abs(m.acceleration)<1e-6);
+   }
+  }
+  for(let d=0;d<720;d+=.2){
+   const m=K.valveMotion(d*K.DEG,kind);
+   assert.ok(K.HEAD.camBase+m.lift+4*m.acceleration>.03,'cam profile has no undercut');
+   assert.ok(Math.abs(2*m.velocity)<.18,'contact stays inside the 0.20-radius bucket');
+   // Moving mass and installed preload, with the rate derived from wire/coil dimensions.
+   const acceleration=m.acceleration*(6000/60*K.TAU)**2*K.MM_PER_UNIT/1000;
+   assert.ok(K.SPRING.preload+K.SPRING.rate*m.lift*K.MM_PER_UNIT+K.SPRING.movingMass*acceleration>0,'positive cam contact force');
+  }
+ }
+});
+test('each spark occurs at its own compression TDC and has a real-time duration',()=>{
+ for(const rpm of [800,1200,3000,6000]){
+  const omega=rpm/60*K.TAU, ignition=K.ignitionAt(0,rpm);
+  assert.ok(ignition.advance>0&&ignition.advance<=32*K.DEG);
+  const start=ignition.start;
+  assert.equal(K.ignitionAt(start-1e-5,rpm).active,false);
+  assert.equal(K.ignitionAt(start+omega*.0006,rpm).active,true);
+  assert.equal(K.ignitionAt(start+omega*.00121,rpm).active,false);
+  assert.equal(K.ignitionAt(start+Math.PI*2,rpm).active,false,'no exhaust-TDC spark');
+  for(let i=0;i<4;i++){
+   const s=K.cylinderAt(K.FIRING_OFFSETS[i]+start+omega*.0002,i);
+   assert.ok(K.ignitionAt(s.phase,rpm).active);close(s.intake,0);close(s.exhaust,0);
+  }
+ }
+ close(K.HEAD.sparkGap*K.MM_PER_UNIT,.9);
+});
+test('port injection and its travelling spray remain inside the open intake event',()=>{
+ for(const rpm of [800,1200,3000,6000]){
+  const omega=rpm/60*K.TAU;
+  for(let n=0;n<180;n++){
+   const t=n*.00003;
+   const phase=380*K.DEG+omega*t, injection=K.injectionAt(phase,rpm);
+   assert.ok(injection.visible&&K.valveLift(phase,'intake')>0);
+   assert.ok(injection.front>=0&&injection.front<=1&&injection.tail>=0&&injection.tail<=1);
+   if(t<.003)assert.ok(injection.active);
+  }
+  assert.equal(K.injectionAt(380*K.DEG+omega*.0055,rpm).visible,false);
+  assert.equal(K.injectionAt(700*K.DEG,rpm).active,false);
+ }
 });
 test('camshaft rotates at exactly half the crankshaft angular speed',()=>{
  close(K.camAngle(K.CYCLE),K.TAU);close(K.camAngle(1.234),.617);

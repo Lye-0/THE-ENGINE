@@ -11,6 +11,8 @@ const samples={
  tube:()=>G.tube([[0,0,0],[0,.3,0],[.2,.6,.1]],.03),
  spring:()=>G.helix(),gear:()=>G.gear(.4,40,.1),
  cam:()=>G.cam(Math.PI,'intake'),
+ hollowRunner:()=>G.sweptPipe(G.curve([[0,0,0],[0,.3,.2],[.2,.6,.7]],24),.18,.022),
+ sectionedRunner:()=>G.sweptPipe(G.curve([[0,0,0],[0,.3,.2],[.2,.6,.7]],24),.18,.022,24,0,Math.PI,[0,1,-1]),
  extrusion:()=>G.extrude([[-1,-1],[1,-1],[1,1],[-1,1]],.3,.02)
 };
 for(const [name,build] of Object.entries(samples))test(`${name}: finite indexed geometry and matching attribute lengths`,()=>{
@@ -66,4 +68,65 @@ test('every view transition retains finite geometry transforms',()=>{
   const visit=n=>{assert.ok(n.world.every(Number.isFinite));for(const child of n.children)visit(child);};visit(engine.root);
  }
  assert.throws(()=>engine.setMode('unknown'));
+});
+test('inclined valves follow their own guides and clear the actual piston crown over 720 degrees',()=>{
+ engine.setMode('cutaway');engine.reducedMotion=true;
+ let minimum=Infinity;
+ for(let d=0;d<720;d+=2){
+  engine.update(d*K.DEG,.016,true);engine.root.update();
+  for(const v of engine.valves){
+   const axis=M.transform(v.frame.world,[0,1,0,0]);
+   close(axis[1],Math.cos(K.HEAD.tilt));close(axis[2],v.side*Math.sin(K.HEAD.tilt));
+   const lift=K.cylinderAt(d*K.DEG,v.i)[v.kind];
+   const position=M.transform(v.moving.world,[0,0,0]),seat=M.transform(v.frame.world,[0,0,0]);
+   for(let k=0;k<3;k++)close(position[k]-seat[k],-lift*axis[k]);
+   const p=v.head.geometry.positions;
+   const crown=engine.pistons[v.i].p[1]+K.HEAD.pistonCrown;
+   for(let j=0;j<p.length;j+=3){
+    const y=M.transform(v.head.world,p.subarray(j,j+3))[1];
+    minimum=Math.min(minimum,y-crown);
+   }
+   assert.ok(K.HEAD.springHeight-lift>6*.04,'spring coils do not bind');
+  }
+ }
+ assert.ok(minimum>.03,`minimum piston/valve clearance: ${minimum*K.MM_PER_UNIT} mm`);
+});
+test('all sixteen manufactured cam envelopes stay in contact with their bucket faces',()=>{
+ engine.setMode('cutaway');engine.reducedMotion=true;
+ for(let d=0;d<720;d+=10){
+  engine.update(d*K.DEG,.016,true);engine.root.update();
+  for(const lobe of engine.camLobes){
+   const valve=engine.valves.find(v=>v.i===lobe.i&&v.kind===lobe.kind&&Math.abs(v.frame.p[0]-engine.xs[v.i]-lobe.dx)<1e-6);
+   const axis=M.transform(valve.frame.world,[0,1,0,0]);
+   const top=M.transform(valve.moving.world,[0,K.HEAD.followerTop,0]);
+   const p=lobe.mesh.geometry.positions;
+   let gap=Infinity;
+   for(let j=0;j<p.length;j+=3){
+    const point=M.transform(lobe.mesh.world,p.subarray(j,j+3));
+    gap=Math.min(gap,V.dot(V.sub(point,top),axis));
+   }
+   assert.ok(gap>=-2e-5&&gap<6e-5,`${lobe.kind} ${d} deg: cam gap ${gap}`);
+  }
+ }
+});
+test('manifolds, injectors and ignition keep their physical attachments and visibility contracts',()=>{
+ assert.equal(engine.injectors.length,4);assert.equal(engine.plugs.length,4);assert.equal(engine.primaryPaths.length,4);
+ for(const nozzle of engine.injectors){
+  assert.equal(nozzle.jets.length,2);
+  for(const jet of nozzle.jets){
+   jet.frame.update();
+   const start=M.transform(jet.frame.world,[0,0,0]),end=M.transform(jet.frame.world,[0,jet.length,0]);
+   start.slice(0,3).forEach((v,k)=>close(v,nozzle.nozzle[k]));
+   end.slice(0,3).forEach((v,k)=>close(v,jet.target[k]));
+  }
+ }
+ for(const mode of ['exterior','exploded','cutaway']){
+  engine.setMode(mode);engine.update(710*K.DEG,.016,true);
+  assert.ok(engine.headers.visible&&engine.intake.visible);
+  for(const section of engine.manifoldSections)assert.equal(section.mesh.geometry,mode==='cutaway'?section.cut:section.full);
+  if(mode!=='cutaway')assert.ok(engine.sparks.every(s=>!s.group.visible)&&engine.flames.every(f=>!f.visible));
+ }
+ engine.update(710*K.DEG,.016,false);
+ assert.ok(engine.sparks.every(s=>!s.group.visible));assert.ok(engine.gases.every(g=>!g.visible));
+ assert.ok(engine.injectors.every(i=>i.jets.every(j=>!j.mesh.visible)));
 });

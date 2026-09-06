@@ -89,6 +89,34 @@ button svg {
   border-bottom:1px solid var(--line);
   z-index:5
 }
+.inspection-views {
+  position:absolute;
+  top:10px;
+  left:50%;
+  transform:translateX(-50%);
+  display:flex;
+  gap:4px;
+  padding:4px;
+  border:1px solid var(--line);
+  border-radius:6px;
+  background:#11191ce8;
+  z-index:4;
+  white-space:nowrap
+}
+.inspection-views button {
+  min-height:34px;
+  padding:0 14px;
+  border-radius:3px;
+  color:var(--muted);
+  font-size:11px;
+  letter-spacing:.05em
+}
+.inspection-views button[aria-pressed="true"] {
+  background:#d6a3831a;
+  color:var(--accent)
+}
+.inspection-views button:hover { color:var(--text); }
+.inspection-views button:focus-visible { outline:2px solid var(--accent);outline-offset:2px; }
 .brand {
   display:flex;
   align-items:center;
@@ -1959,4 +1987,14 @@ dialog dd {
 }
 @media (max-height:500px) and (min-width:601px) {
   .footer { display:none; }
+}
+
+/* Close observation uses the available canvas without text over the mechanism. */
+.is-inspecting .introduction,.is-inspecting .telemetry,.is-inspecting .ghost-type,.is-inspecting .mode-caption { visibility:hidden; }
+.is-inspecting .viewport { top:96px;left:3%;right:3%; }
+@media(max-width:700px) {
+  .is-inspecting .viewport { top:77px;left:0;right:0; }
+}
+@media(max-height:500px) and (min-width:601px) {
+  .is-inspecting .viewport { top:57px; }
 }

@@ -1,0 +1,16 @@
+{
+  "browser": "152.0.4191.62",
+  "checks": [
+    "Initial render, title and reduced-motion pause",
+    "ignition: source position, visible pixels, correct cylinder and pause",
+    "injection: source position, visible pixels, correct cylinder and pause",
+    "Exterior, exploded and cutaway keep attached manifolds and reset observation controls",
+    "Eight-part exploration, navigation and Escape",
+    "All three rendering qualities including new shaders",
+    "Playback, pause, crank scrub, RPM, speed, orbit/reset and modal resume",
+    "Responsive observation controls at 390 × 844",
+    "Responsive observation controls at 320 × 740",
+    "Responsive observation controls at 820 × 1180",
+    "No JavaScript or WebGL errors"
+  ]
+}

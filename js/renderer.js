@@ -5,6 +5,8 @@
 (function (F) {
     'use strict';
     const { M, V } = F;
+    const SPRING_SHAPE = `uniform vec4 uSpring;
+void springShape(inout vec3 p,inout vec3 n,vec2 uv){if(uSpring.x<=0.)return;float w=6.28318530718*uSpring.z,a=uv.y*w,b=uv.x*6.28318530718;float height=uSpring.y-2.*uSpring.w;vec3 radial=vec3(cos(a),0.,sin(a));vec3 tangent=normalize(vec3(-uSpring.x*w*sin(a),height,uSpring.x*w*cos(a)));n=cos(b)*radial+sin(b)*cross(tangent,radial);p=vec3(uSpring.x*cos(a),uSpring.w+uv.y*height,uSpring.x*sin(a))+uSpring.w*n;}`;
     const VERT = `#version 300 es
 precision highp float;
 layout(location=0) in vec3 aPosition;
@@ -13,13 +15,16 @@ layout(location=2) in vec2 aUV;
 layout(location=3) in mat4 aModel;
 uniform mat4 uVP; uniform mat4 uLightVP; uniform mat4 uView;
 out vec3 vWorld; out vec3 vNormal; out vec3 vLocal; out vec2 vUV; out vec4 vShadow;
-void main(){vec4 world=aModel*vec4(aPosition,1.0);vWorld=world.xyz;vNormal=transpose(inverse(mat3(aModel)))*aNormal;vLocal=aPosition;vUV=aUV;vShadow=uLightVP*world;gl_Position=uVP*world;}`;
+${SPRING_SHAPE}
+void main(){vec3 p=aPosition,n=aNormal;springShape(p,n,aUV);vec4 world=aModel*vec4(p,1.0);vWorld=world.xyz;vNormal=transpose(inverse(mat3(aModel)))*n;vLocal=p;vUV=aUV;vShadow=uLightVP*world;gl_Position=uVP*world;}`;
     const FRAG = `#version 300 es
 precision highp float;
 in vec3 vWorld;in vec3 vNormal;in vec3 vLocal;in vec2 vUV;in vec4 vShadow;
 layout(location=0) out vec4 outColor;layout(location=1) out vec4 outNormal;
 uniform vec3 uCamera;uniform mat4 uView;uniform vec3 uColor;uniform float uMetal;uniform float uRough;uniform float uAlpha;uniform float uKind;uniform float uEmission;uniform float uAO;uniform float uTime;
 uniform sampler2D uShadow;uniform sampler2D uMap;uniform float uUseMap;uniform float uShadowTexel;uniform int uQuality;
+uniform vec4 uIgnitionLights[4];uniform vec4 uChamber;uniform vec3 uFlow;uniform float uChamberSlope;
+uniform vec4 uSprayOrigin;uniform vec3 uSprayAxis;
 const float PI=3.14159265359;
 float hash(vec3 p){p=fract(p*.1031);p+=dot(p,p.yzx+33.33);return fract((p.x+p.y)*p.z);}
 float noise(vec3 x){vec3 i=floor(x),f=fract(x);f=f*f*(3.-2.*f);return mix(mix(mix(hash(i),hash(i+vec3(1,0,0)),f.x),mix(hash(i+vec3(0,1,0)),hash(i+vec3(1,1,0)),f.x),f.y),mix(mix(hash(i+vec3(0,0,1)),hash(i+vec3(1,0,1)),f.x),mix(hash(i+vec3(0,1,1)),hash(i+vec3(1,1,1)),f.x),f.y),f.z);}
@@ -35,7 +40,11 @@ vec3 lightBRDF(vec3 n,vec3 v,vec3 l,vec3 radiance,vec3 color,float rough,float m
 float shadow(vec3 n){vec3 p=vShadow.xyz/vShadow.w*.5+.5;if(p.z<0.||p.z>1.||p.x<0.||p.x>1.||p.y<0.||p.y>1.)return 1.;float bias=max(.00035,.0010*(1.-max(dot(n,normalize(vec3(-4,8,5))),0.)));float sum=0.;for(int x=-1;x<=1;x++)for(int y=-1;y<=1;y++){float dd=texture(uShadow,p.xy+vec2(float(x),float(y))*uShadowTexel*1.4).r;sum+=p.z-bias>dd?0.:1.;}return mix(.23,1.,sum/9.);}
 vec3 aces(vec3 x){return clamp((x*(2.51*x+.03))/(x*(2.43*x+.59)+.14),0.,1.);}
 void main(){vec3 n=normalize(vNormal);if(!gl_FrontFacing)n=-n;vec3 view=normalize(uCamera-vWorld);float rough=clamp(uRough,.08,.95),metal=uMetal;vec3 base=pow(uColor,vec3(2.2));float alpha=uAlpha;
+if(uChamber.z>0.0){vec2 radial=vec2(vWorld.x-uChamber.x,vWorld.z);if(length(radial)>uChamber.z||vWorld.y<uChamber.y||vWorld.y>uChamber.w-abs(vWorld.z)*uChamberSlope)discard;}
 if(uUseMap>.5){vec4 tex=texture(uMap,vUV);base*=pow(tex.rgb,vec3(2.2));alpha*=tex.a;if(alpha<.02)discard;}
+if(uKind>5.5&&uKind<6.5){alpha*=pow(abs(dot(n,view)),1.7);outColor=vec4(pow(aces(uColor*uEmission),vec3(1./2.2)),alpha);outNormal=vec4(normalize(mat3(uView)*n)*.5+.5,1);return;}
+if(uKind>7.5&&uKind<8.5){float turbulence=noise(vLocal*18.+vec3(uTime*4.,uTime*7.,0.));float rim=pow(1.-abs(dot(n,view)),.6);alpha*=.20+.7*rim;alpha*=smoothstep(.18,.78,turbulence);outColor=vec4(pow(aces(uColor*(uEmission+turbulence)),vec3(1./2.2)),alpha);outNormal=vec4(normalize(mat3(uView)*n)*.5+.5,1);return;}
+if(uKind>8.5&&uKind<9.5){if(dot(normalize(vNormal),view)<0.)discard;float optical=0.;float stepSize=uSprayOrigin.w/32.;float jitter=hash(vWorld*230.);for(int i=0;i<32;i++){vec3 q=vWorld-view*(float(i)+jitter)*stepSize-uSprayOrigin.xyz;float axial=dot(q,uSprayAxis),t=axial/uSprayOrigin.w;float radius=max(.001,.105*axial);float radial=length(q-uSprayAxis*axial)/radius;if(t>uFlow.y&&t<uFlow.x&&radial<1.){float density=exp(-3.*radial*radial)*(.55+.45*noise(q*180.+vec3(0,0,-uFlow.z)));optical+=density*stepSize;}}alpha*=1.-exp(-optical*60.);if(alpha<.001)discard;outColor=vec4(pow(aces(uColor*.85),vec3(1./2.2)),alpha);outNormal=vec4(normalize(mat3(uView)*n)*.5+.5,1);return;}
 if(uKind>3.5&&uKind<4.5){float ripple=noise(vec3(vLocal.x*9.,vLocal.y*6.-uTime*2.,vLocal.z*9.));float edge=pow(1.-abs(dot(n,view)),1.4);alpha*=.45+.5*edge;vec3 c=uColor*(.75+ripple*.4+uEmission);outColor=vec4(pow(aces(c),vec3(1./2.2)),alpha);outNormal=vec4(normalize(mat3(uView)*n)*.5+.5,1);return;}
 if(uKind>.5&&uKind<1.5){float coord=vLocal.y*410.;float footprint=fwidth(coord);float lines=sin(coord)*exp(-footprint*.6);float crown=sin(length(vLocal.xz)*850.)*exp(-fwidth(length(vLocal.xz)*850.)*.45);rough=clamp(rough+lines*.023+crown*.011,.09,.85);base*=.96+.025*lines;}
 if(uKind>1.5&&uKind<2.5){float grain=noise(vLocal*95.);rough=clamp(rough+grain*.13,.12,.95);base*=.84+grain*.22;n=normalize(n+vec3(dFdx(grain),dFdy(grain),0.)*.015);}
@@ -43,6 +52,7 @@ if(uKind>2.5&&uKind<3.5){float lines=sin(vLocal.x*370.)*exp(-fwidth(vLocal.x*370
 float sh=shadow(n);vec3 color=lightBRDF(n,view,normalize(vec3(-3.,6.,5.)),vec3(2.8,2.8,2.65)*sh,base,rough,metal);
 color+=lightBRDF(n,view,normalize(vec3(4.,3.,-4.)),vec3(1.55,1.9,2.3),base,rough,metal);
 color+=lightBRDF(n,view,normalize(vec3(-3.,1.,-2.)),vec3(.55,.66,.75),base,rough,metal);
+for(int i=0;i<4;i++){vec3 delta=uIgnitionLights[i].xyz-vWorld;float d=length(delta);float irradiance=uIgnitionLights[i].w*.012*(1.-smoothstep(.07,.48,d))/max(d*d,.0003);color+=lightBRDF(n,view,delta/max(d,.0001),vec3(.50,.70,1.)*irradiance,base,rough,metal);}
 vec3 r=reflect(-view,n);vec3 f0=mix(vec3(.04),base,metal);vec3 fr=fresnel(max(dot(n,view),0.),f0);
 color+=environment(r,rough)*fr*(.80-.2*rough)*uAO;
 color+=environment(n,.93)*base*(1.-metal)*.36*uAO;
@@ -50,7 +60,9 @@ color+=base*.026*uAO;color*=.82+.18*sh;color+=base*uEmission;
 if(uKind>4.5&&uKind<5.5){float distanceFromCenter=length(vWorld.xz/vec2(4.2,2.3));alpha*=1.-smoothstep(.55,1.,distanceFromCenter);color*=.65;}
 outColor=vec4(pow(aces(color*1.03),vec3(1./2.2)),alpha);outNormal=vec4(normalize(mat3(uView)*n)*.5+.5,1.);}`;
     const DEPTHVERT = `#version 300 es
-precision highp float;layout(location=0) in vec3 aPosition;layout(location=3) in mat4 aModel;uniform mat4 uLightVP;void main(){gl_Position=uLightVP*aModel*vec4(aPosition,1.);}`;
+precision highp float;layout(location=0) in vec3 aPosition;layout(location=2) in vec2 aUV;layout(location=3) in mat4 aModel;uniform mat4 uLightVP;
+${SPRING_SHAPE}
+void main(){vec3 p=aPosition,n=vec3(0,1,0);springShape(p,n,aUV);gl_Position=uLightVP*aModel*vec4(p,1.);}`;
     const DEPTHFRAG = `#version 300 es
 precision highp float;void main(){}`;
     const POSTVERT = `#version 300 es
@@ -151,7 +163,7 @@ float grain=fract(sin(dot(gl_FragCoord.xy,vec2(12.9,78.2)))*43758.54)-.5;c.rgb+=
             triangles += n.geometry.indices.length / 3;
         } for (const c of n.children)
             visit(c); }; visit(root); this.active = [...this.batches.values()].filter(b => b.nodes.length); this.stats.parts = parts; this.stats.triangles = triangles; }
-        drawBatch(b) { const gl = this.gl, g = this.upload(b.g); const required = b.nodes.length * 16; if (!b.data || b.data.length < required)
+        drawBatch(b, uniforms = this.main.u) { const gl = this.gl, g = this.upload(b.g); gl.uniform4fv(uniforms.uSpring, b.m.spring || [0,0,0,0]); const required = b.nodes.length * 16; if (!b.data || b.data.length < required)
             b.data = new Float32Array(required); b.nodes.forEach((n, i) => b.data.set(n.world, i * 16)); gl.bindVertexArray(g.vao); gl.bindBuffer(gl.ARRAY_BUFFER, g.instances); gl.bufferData(gl.ARRAY_BUFFER, b.data.subarray(0, required), gl.DYNAMIC_DRAW); gl.drawElementsInstanced(gl.TRIANGLES, g.count, gl.UNSIGNED_INT, 0, b.nodes.length); this.stats.drawCalls++; }
         render(root, camera, time = 0) {
             const gl = this.gl;
@@ -177,7 +189,7 @@ float grain=fract(sin(dot(gl_FragCoord.xy,vec2(12.9,78.2)))*43758.54)-.5;c.rgb+=
             gl.polygonOffset(1.2, 2.0);
             for (const b of this.active)
                 if (b.m.alpha > .95 && b.cast && b.m.kind !== 4)
-                    this.drawBatch(b);
+                    this.drawBatch(b, this.depth.u);
             gl.disable(gl.POLYGON_OFFSET_FILL);
             gl.bindFramebuffer(gl.FRAMEBUFFER, this.msFBO || this.fbo);
             gl.drawBuffers([gl.COLOR_ATTACHMENT0, gl.COLOR_ATTACHMENT1]);
@@ -193,11 +205,13 @@ float grain=fract(sin(dot(gl_FragCoord.xy,vec2(12.9,78.2)))*43758.54)-.5;c.rgb+=
             gl.uniform1f(u.uShadowTexel, 1 / this.shadowSize);
             gl.uniform1i(u.uQuality, this.quality);
             gl.uniform1f(u.uTime, time);
+            gl.uniform1f(u.uChamberSlope, Math.tan(F.K.HEAD.tilt));
+            gl.uniform4fv(u['uIgnitionLights[0]'], root.ignitionLights || new Float32Array(16));
             gl.activeTexture(gl.TEXTURE0);
             gl.bindTexture(gl.TEXTURE_2D, this.shadowTex);
             gl.uniform1i(u.uShadow, 0);
             gl.uniform1i(u.uMap, 1);
-            const draw = b => { const m = b.m; gl.uniform3fv(u.uColor, m.color); gl.uniform1f(u.uMetal, m.metal); gl.uniform1f(u.uRough, m.rough); gl.uniform1f(u.uKind, m.kind); gl.uniform1f(u.uAlpha, m.alpha); gl.uniform1f(u.uAO, m.ao); gl.uniform1f(u.uEmission, m.emission); gl.uniform1f(u.uUseMap, m.texture ? 1 : 0); gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D, m.texture || this.white); this.drawBatch(b); };
+            const draw = b => { const m = b.m; gl.uniform3fv(u.uColor, m.color); gl.uniform1f(u.uMetal, m.metal); gl.uniform1f(u.uRough, m.rough); gl.uniform1f(u.uKind, m.kind); gl.uniform1f(u.uAlpha, m.alpha); gl.uniform1f(u.uAO, m.ao); gl.uniform1f(u.uEmission, m.emission); gl.uniform4fv(u.uChamber, m.chamber || [0,0,0,0]); gl.uniform3fv(u.uFlow, m.flow || [0,0,0]); gl.uniform4fv(u.uSprayOrigin, m.sprayOrigin || [0,0,0,0]); gl.uniform3fv(u.uSprayAxis, m.sprayAxis || [0,1,0]); gl.uniform1f(u.uUseMap, m.texture ? 1 : 0); gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D, m.texture || this.white); this.drawBatch(b); };
             for (const b of this.active)
                 if (b.m.alpha >= .995)
                     draw(b);
@@ -205,8 +219,10 @@ float grain=fract(sin(dot(gl_FragCoord.xy,vec2(12.9,78.2)))*43758.54)-.5;c.rgb+=
             gl.blendFuncSeparate(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA, gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
             gl.depthMask(false);
             const transparent = this.active.filter(b => b.m.alpha < .995).sort((a, b) => { const p = n => n.nodes[0].world; return V.len(V.sub([p(b)[12], p(b)[13], p(b)[14]], camera.eye)) - V.len(V.sub([p(a)[12], p(a)[13], p(a)[14]], camera.eye)); });
-            for (const b of transparent)
+            for (const b of transparent) {
+                gl.blendFuncSeparate(gl.SRC_ALPHA, b.m.kind === 6 ? gl.ONE : gl.ONE_MINUS_SRC_ALPHA, gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
                 draw(b);
+            }
             gl.depthMask(true);
             gl.disable(gl.BLEND);
             if (this.msFBO) {

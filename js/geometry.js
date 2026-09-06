@@ -125,9 +125,79 @@
             const a = (t + k / 4) / teeth * Math.PI * 2, r = radius * (k === 1 || k === 2 ? 1.04 : .94);
             p.push([Math.cos(a) * r, Math.sin(a) * r]);
         } return extrude(p, thickness, .004); }
-    function cam(phaseOffset, kind, segments = 96) { const p = []; for (let i = 0; i < segments; i++) {
-        const a = i / segments * Math.PI * 2, phase = 2 * (Math.PI - a) - phaseOffset, r = .17 + F.K.valveLift(phase, kind);
-        p.push([Math.sin(a) * r, Math.cos(a) * r]);
-    } return extrude(p, .125, .012); }
-    F.G = { geo, lathe, cylinder, ring, box, sphere, torus, tube, curve, helix, extrude, gear, cam };
+    // The envelope of the flat bucket's planes, not a radial approximation.
+    // h is support distance and h' locates the moving contact point. A positive
+    // h+h'' is checked in tests to exclude undercuts and self-intersections.
+    function cam(phaseOffset, kind, segments = 384, tilt = 0) {
+        const b = meshBuilder(), profile = [], normals = [], depth = .145, bevel = .007;
+        for (let i = 0; i <= segments; i++) {
+            const a = i / segments * Math.PI * 2, n = [Math.cos(a), Math.sin(a)];
+            const motion = F.K.valveMotion(2 * (a + tilt + Math.PI / 2) - phaseOffset, kind);
+            const h = F.K.HEAD.camBase + motion.lift, derivative = 2 * motion.velocity;
+            profile.push([h * n[0] - derivative * n[1], h * n[1] + derivative * n[0]]);
+            normals.push(n);
+        }
+        const rows = [];
+        for (const side of [-1, 1]) {
+            for (let j = 0; j <= 3; j++) {
+                const t = (side < 0 ? 3 - j : j) / 3 * Math.PI / 2;
+                rows.push({ z: side * (depth / 2 - bevel + bevel * Math.sin(t)), inset: bevel * (1 - Math.cos(t)), nz: side * Math.sin(t), nr: Math.cos(t) });
+            }
+        }
+        for (const row of rows) for (let i = 0; i <= segments; i++) {
+            const p = profile[i], n = normals[i];
+            b.vertex([p[0] - n[0] * row.inset, p[1] - n[1] * row.inset, row.z],
+                [n[0] * row.nr, n[1] * row.nr, row.nz], [i / segments, (row.z / depth + .5)]);
+        }
+        for (let j = 0; j < rows.length - 1; j++) for (let i = 0; i < segments; i++) {
+            const a = j * (segments + 1) + i;
+            b.quad(a, a + 1, a + segments + 2, a + segments + 1);
+        }
+        for (const side of [-1, 1]) {
+            const c = b.vertex([0, 0, side * depth / 2], [0, 0, side]);
+            const rim = profile.map((p, i) => b.vertex([p[0] - bevel * normals[i][0], p[1] - bevel * normals[i][1], side * depth / 2], [0, 0, side]));
+            for (let i = 0; i < segments; i++) side > 0 ? b.tri(c, rim[i], rim[i + 1]) : b.tri(c, rim[i + 1], rim[i]);
+        }
+        return b.done();
+    }
+    // Hollow runners with inner walls, end lips and actual section edges.
+    function sweptPipe(points, radius = .18, wall = .023, sides = 32, start = 0, arc = Math.PI * 2, cutFacing = null) {
+        const b = meshBuilder(), frames = [], count = sides + 1;
+        let prev;
+        for (let i = 0; i < points.length; i++) {
+            const t = V.norm(V.sub(points[Math.min(i + 1, points.length - 1)], points[Math.max(i - 1, 0)]));
+            const n = prev ? V.norm(V.sub(prev, V.mul(t, V.dot(prev, t)))) : V.norm(V.cross(t, Math.abs(t[1]) > .95 ? [1, 0, 0] : [0, 1, 0]));
+            frames.push({ n, b: V.norm(V.cross(t, n)), t }); prev = n;
+        }
+        for (const inner of [false, true]) {
+            const base = b.p.length / 3;
+            for (let i = 0; i < points.length; i++) for (let j = 0; j <= sides; j++) {
+                const f = frames[i];
+                const begin = cutFacing ? Math.atan2(-V.dot(cutFacing, f.b), -V.dot(cutFacing, f.n)) - arc / 2 : start;
+                const a = begin + j / sides * arc;
+                const normal = V.add(V.mul(f.n, Math.cos(a)), V.mul(f.b, Math.sin(a)));
+                const r = (Array.isArray(radius) ? radius[i] : radius) - (inner ? wall : 0);
+                b.vertex(V.add(points[i], V.mul(normal, r)), V.mul(normal, inner ? -1 : 1), [j / sides, i / (points.length - 1)]);
+            }
+            for (let i = 0; i < points.length - 1; i++) for (let j = 0; j < sides; j++) {
+                const a = base + i * count + j;
+                inner ? b.quad(a, a + count, a + count + 1, a + 1) : b.quad(a, a + 1, a + count + 1, a + count);
+            }
+        }
+        const layer = points.length * count;
+        for (const end of [0, points.length - 1]) for (let j = 0; j < sides; j++) {
+            const a = end * count + j, normal = V.mul(frames[end].t, end === 0 ? -1 : 1);
+            const ids = [a, a + 1, a + 1 + layer, a + layer].map(k => b.vertex(b.p.slice(k * 3, k * 3 + 3), normal));
+            end === 0 ? b.quad(...ids.slice().reverse()) : b.quad(...ids);
+        }
+        if (arc < Math.PI * 2 - 1e-6) for (const side of [0, sides]) for (let i = 0; i < points.length - 1; i++) {
+            const a = i * count + side, ids = [a, a + count, a + count + layer, a + layer];
+            const p = ids.map(k => b.p.slice(k * 3, k * 3 + 3));
+            const n = V.norm(V.cross(V.sub(p[1], p[0]), V.sub(p[2], p[0])));
+            const out = p.map(q => b.vertex(q, side ? n : V.mul(n, -1)));
+            side ? b.quad(...out) : b.quad(...out.reverse());
+        }
+        return b.done();
+    }
+    F.G = { geo, lathe, cylinder, ring, box, sphere, torus, tube, curve, helix, extrude, gear, cam, sweptPipe };
 })(globalThis.FERRO);
